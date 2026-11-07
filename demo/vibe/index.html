@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>バイブコーディングの裏側</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --ink:#1a1f2b; --sub:#5b6472;
+    --line:#d6dbe3; --user:#1f6feb; --userbg:#e3efff; --ai:#b26a00; --aibg:#fff3d6;
+    --hl:#ffe680; --accent:#1a1f2b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Hiragino Sans","Yu Gothic","Noto Sans JP",system-ui,sans-serif;
+    display:flex; flex-direction:column; min-height:100vh;
+  }
+  header{
+    background:var(--accent); color:#fff; padding:10px 18px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+  }
+  header h1{font-size:22px; margin:0; letter-spacing:.02em}
+  header .spacer{flex:1}
+  .hbtn{
+    font:inherit; font-size:16px; padding:9px 16px; border-radius:8px;
+    border:2px solid #fff; background:transparent; color:#fff; cursor:pointer; min-height:44px;
+  }
+  .hbtn.primary{background:#fff; color:var(--accent); font-weight:700}
+  .hbtn:disabled{opacity:.4; cursor:default}
+  .mute{display:flex; align-items:center; gap:6px; font-size:15px}
+
+  main{flex:1; display:grid; grid-template-columns:300px 1fr 340px; gap:12px; padding:12px}
+  @media (max-width:1000px){ main{grid-template-columns:1fr} }
+
+  .pane{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px; overflow:auto}
+  .pane h2{font-size:17px; margin:0 0 10px; padding-bottom:8px; border-bottom:2px solid var(--line)}
+  .num{display:inline-block; background:var(--accent); color:#fff; border-radius:6px; padding:1px 8px; margin-right:6px}
+
+  fieldset{border:1px solid var(--line); border-radius:10px; margin:0 0 10px; padding:8px 10px 10px}
+  legend{font-size:14px; font-weight:700; color:var(--sub); padding:0 6px}
+  .opts{display:flex; flex-wrap:wrap; gap:6px}
+  .chip{
+    font:inherit; font-size:15px; padding:8px 12px; min-height:40px;
+    border:2px solid var(--line); background:#fff; border-radius:999px; cursor:pointer;
+  }
+  .chip[aria-pressed="true"]{border-color:var(--user); background:var(--userbg); font-weight:700}
+  .chip.none[aria-pressed="true"]{border-color:var(--ai); background:var(--aibg)}
+  .make{
+    width:100%; font:inherit; font-size:19px; font-weight:700; padding:14px; margin-top:4px;
+    border:none; border-radius:10px; background:var(--accent); color:#fff; cursor:pointer; min-height:52px;
+  }
+
+  pre#code{
+    margin:0; font-family:"SF Mono",Menlo,Consolas,monospace; font-size:18px; line-height:1.55;
+    white-space:pre; overflow-x:auto;
+  }
+  .ln{display:block; padding:1px 6px; border-radius:4px; border-left:6px solid transparent}
+  .ln.user{background:var(--userbg); border-left-color:var(--user)}
+  .ln.ai{background:var(--aibg); border-left-color:var(--ai)}
+  .ln[data-key]{cursor:pointer}
+  .tag{
+    font-family:inherit; font-size:12px; font-weight:700; color:#fff; background:var(--ai);
+    border-radius:4px; padding:0 5px; margin-right:6px; vertical-align:2px;
+  }
+  .tag.u{background:var(--user)}
+  .legendrow{display:flex; gap:14px; margin-top:12px; font-size:14px; flex-wrap:wrap}
+  .sw{display:inline-block; width:14px; height:14px; border-radius:3px; vertical-align:-2px; margin-right:5px}
+
+  #stage{
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    min-height:150px; border:2px dashed var(--line); border-radius:10px; padding:14px; background:#fbfcfe;
+  }
+  #stage.hl{outline:4px solid var(--hl); outline-offset:2px}
+  #msg{font-size:16px; color:var(--sub); min-height:24px}
+
+  table.brk{width:100%; border-collapse:collapse; margin-top:12px; font-size:15px}
+  table.brk th,table.brk td{border-bottom:1px solid var(--line); padding:7px 6px; text-align:left}
+  table.brk th{color:var(--sub); font-size:13px}
+  tr[data-key]{cursor:pointer}
+  .who{font-size:13px; font-weight:700; border-radius:5px; padding:2px 7px; white-space:nowrap}
+  .who.user{background:var(--userbg); color:var(--user)}
+  .who.ai{background:var(--aibg); color:var(--ai)}
+  .fixed{font-size:12px; color:var(--sub)}
+
+  .hl{background:var(--hl) !important; outline:2px solid #d9a400}
+
+  footer{
+    background:var(--panel); border-top:2px solid var(--line); padding:10px 18px;
+    display:flex; gap:28px; align-items:baseline; flex-wrap:wrap;
+  }
+  footer .k{font-size:16px; color:var(--sub)}
+  footer .v{font-size:30px; font-weight:800; margin-left:8px}
+  footer .v.user{color:var(--user)}
+  footer .v.ai{color:var(--ai)}
+  footer .note{margin-left:auto; font-size:14px; color:var(--sub)}
+  .empty{color:var(--sub); font-size:15px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>バイブコーディングの裏側</h1>
+  <div class="spacer"></div>
+  <label class="mute"><input type="checkbox" id="sound"> 音を出す</label>
+  <button class="hbtn" id="again" disabled>もう一度作る</button>
+  <button class="hbtn" id="reset">最初から</button>
+</header>
+
+<main>
+  <section class="pane">
+    <h2><span class="num">1</span>たのむ</h2>
+
+    <fieldset>
+      <legend>何を作る</legend>
+      <div class="opts"><button class="chip" aria-pressed="true" disabled>ボタン</button></div>
+    </fieldset>
+
+    <fieldset data-group="size">
+      <legend>大きさ</legend>
+      <div class="opts">
+        <button class="chip" data-v="sm">小</button>
+        <button class="chip" data-v="md">中</button>
+        <button class="chip" data-v="lg">大</button>
+        <button class="chip none" data-v="" aria-pressed="true">指定しない</button>
+      </div>
+    </fieldset>
+
+    <fieldset data-group="color">
+      <legend>色</legend>
+      <div class="opts">
+        <button class="chip" data-v="red">赤</button>
+        <button class="chip" data-v="blue">青</button>
+        <button class="chip" data-v="green">緑</button>
+        <button class="chip none" data-v="" aria-pressed="true">指定しない</button>
+      </div>
+    </fieldset>
+
+    <fieldset data-group="label">
+      <legend>文字</legend>
+      <div class="opts">
+        <button class="chip" data-v="おす">おす</button>
+        <button class="chip" data-v="スタート">スタート</button>
+        <button class="chip" data-v="やってみる">やってみる</button>
+        <button class="chip none" data-v="" aria-pressed="true">指定しない</button>
+      </div>
+    </fieldset>
+
+    <fieldset data-group="press">
+      <legend>押したら</legend>
+      <div class="opts">
+        <button class="chip" data-v="sound">音が鳴る</button>
+        <button class="chip" data-v="text">文字が出る</button>
+        <button class="chip" data-v="color">色が変わる</button>
+        <button class="chip none" data-v="" aria-pressed="true">指定しない</button>
+      </div>
+    </fieldset>
+
+    <button class="make" id="make">作って</button>
+  </section>
+
+  <section class="pane">
+    <h2><span class="num">2</span>できたコード</h2>
+    <pre id="code"><span class="empty">「作って」をおすと、ここにコードが出ます。</span></pre>
+    <div class="legendrow">
+      <span><span class="sw" style="background:var(--userbg);border:2px solid var(--user)"></span>あなたが決めた</span>
+      <span><span class="sw" style="background:var(--aibg);border:2px solid var(--ai)"></span>AIが決めた</span>
+      <span style="color:var(--sub)">※行をクリックすると、3つが光ります</span>
+    </div>
+  </section>
+
+  <section class="pane">
+    <h2><span class="num">3</span>動く画面</h2>
+    <div id="stage"><span class="empty">まだ何もありません</span></div>
+    <div id="msg"></div>
+    <table class="brk">
+      <thead><tr><th>できあがったもののうちわけ</th><th>値</th><th>決めた人</th></tr></thead>
+      <tbody id="brk"><tr><td colspan="3" class="empty">まだありません</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<footer>
+  <span class="k">あなたが決めたこと<span class="v user" id="cu">-</span></span>
+  <span class="k">AIが決めたこと<span class="v ai" id="ca">-</span></span>
+  <span class="note">※「角の丸み」と「余白」は、あなたが指定できません。いつもAIが決めます。</span>
+</footer>
+
+<script>
+/* ===== 押したときに動く、本物の関数 ===== */
+function 音を鳴らす(){
+  var on = document.getElementById('sound').checked;
+  var m = document.getElementById('msg');
+  if(!on){ m.textContent = '♪（音はミュート中です。右上の「音を出す」を入れると鳴ります）'; return; }
+  try{
+    var ac = new (window.AudioContext||window.webkitAudioContext)();
+    var o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = 880; o.connect(g); g.connect(ac.destination);
+    g.gain.setValueAtTime(.2, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.001, ac.currentTime+.3);
+    o.start(); o.stop(ac.currentTime+.3);
+    m.textContent = '♪ 音が鳴りました';
+  }catch(e){ m.textContent = '♪（この端末では音が出ませんでした）'; }
+}
+function 文字を出す(){ document.getElementById('msg').textContent = 'できた！'; }
+function 色を変える(el){
+  var c = ['#d94b4b','#3b6fd4','#2f9e63','#8b5cf6'];
+  el.style.background = c[Math.floor(Math.random()*c.length)];
+  document.getElementById('msg').textContent = '色が変わりました';
+}
+
+/* ===== 疑似生成エンジン（AIは呼ばない） ===== */
+var CAND = {
+  size:  ['sm','md','lg'],
+  color: ['red','blue','green','gray'],
+  label: ['ボタン','クリック','OK','おす'],
+  press: ['sound','text','color'],
+  radius:[0,4,8,16],
+  pad:   ['8px 16px','12px 24px','16px 32px']
+};
+var SIZE_PX = {sm:16, md:20, lg:28};
+var SIZE_JA = {sm:'小', md:'中', lg:'大'};
+var COLOR_HEX= {red:'#d94b4b', blue:'#3b6fd4', green:'#2f9e63', gray:'#6b7280'};
+var COLOR_JA = {red:'赤', blue:'青', green:'緑', gray:'グレー'};
+var PRESS_FN = {sound:'音を鳴らす()', text:'文字を出す()', color:'色を変える(this)'};
+var PRESS_JA = {sound:'音が鳴る', text:'文字が出る', color:'色が変わる'};
+var USER_KEYS = ['size','color','label','press'];
+var AI_ONLY   = ['radius','pad'];
+
+var order   = {size:null, color:null, label:null, press:null};
+var lastVal = null;
+
+function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+/**
+ * 指示から値を決める。未指定はランダムに埋め、出所を記録する。
+ * @param {Object} ord 生徒が組み立てた指示（null は未指定）
+ * @param {?Object} prev 直前に決まった値。あれば AI 部分を必ず1つ以上変える
+ * @returns {{val:Object, src:Object, byUser:number, byAi:number}}
+ */
+function decide(ord, prev){
+  var val={}, src={};
+  for(var i=0;i<USER_KEYS.length;i++){
+    var k = USER_KEYS[i];
+    if(ord[k]){ val[k]=ord[k]; src[k]='user'; }
+    else      { val[k]=pick(CAND[k]); src[k]='ai'; }
+  }
+  for(var j=0;j<AI_ONLY.length;j++){ var a=AI_ONLY[j]; val[a]=pick(CAND[a]); src[a]='ai'; }
+
+  if(prev){
+    var aiKeys = Object.keys(src).filter(function(k){ return src[k]==='ai'; });
+    var same = aiKeys.every(function(k){ return String(val[k])===String(prev[k]); });
+    var guard = 0;
+    while(same && aiKeys.length && guard++ < 40){
+      var k2 = pick(aiKeys);
+      val[k2] = pick(CAND[k2]);
+      same = aiKeys.every(function(k){ return String(val[k])===String(prev[k]); });
+    }
+  }
+  var bu=0, ba=0;
+  Object.keys(src).forEach(function(k){ src[k]==='user' ? bu++ : ba++; });
+  return {val:val, src:src, byUser:bu, byAi:ba};
+}
+
+/** 決まった値を、本物のHTMLの行に展開する */
+function buildLines(val, src){
+  return [
+    {code:'<button',                                      key:null,     from:'base'},
+    {code:'  style="',                                    key:null,     from:'base'},
+    {code:'    font-size: '+SIZE_PX[val.size]+'px;',      key:'size',   from:src.size},
+    {code:'    background: '+COLOR_HEX[val.color]+';',    key:'color',  from:src.color},
+    {code:'    color: #ffffff;',                          key:null,     from:'base'},
+    {code:'    border: none;',                            key:null,     from:'base'},
+    {code:'    border-radius: '+val.radius+'px;',         key:'radius', from:'ai'},
+    {code:'    padding: '+val.pad+';',                    key:'pad',    from:'ai'},
+    {code:'  "',                                          key:null,     from:'base'},
+    {code:'  onclick="'+PRESS_FN[val.press]+'"',          key:'press',  from:src.press},
+    {code:'>'+val.label+'</button>',                      key:'label',  from:src.label}
+  ];
+}
+
+/* ===== 画面に出す ===== */
+var timer = null;
+
+function render(lines, val, src, res){
+  var code = document.getElementById('code');
+  code.textContent = '';
+  if(timer) clearInterval(timer);
+
+  var i = 0;
+  timer = setInterval(function(){
+    if(i >= lines.length){
+      clearInterval(timer); timer = null;
+      showPreview(lines); showBreakdown(val, src);
+      document.getElementById('cu').textContent = res.byUser;
+      document.getElementById('ca').textContent = res.byAi;
+      document.getElementById('again').disabled = false;
+      return;
+    }
+    var l = lines[i++];
+    var span = document.createElement('span');
+    span.className = 'ln' + (l.from==='user' ? ' user' : (l.from==='ai' ? ' ai' : ''));
+    if(l.key) span.setAttribute('data-key', l.key);
+    if(l.from==='user' || l.from==='ai'){
+      var tag = document.createElement('span');
+      tag.className = 'tag' + (l.from==='user' ? ' u' : '');
+      tag.textContent = l.from==='user' ? 'あなた' : 'AI';
+      span.appendChild(tag);
+    }
+    span.appendChild(document.createTextNode(l.code));
+    code.appendChild(span);
+  }, 150);
+}
+
+function showPreview(lines){
+  var html = lines.map(function(l){ return l.code; }).join('\n');
+  var stage = document.getElementById('stage');
+  stage.innerHTML = html;                    /* ← 表示したコードを、そのまま動かす */
+  stage.setAttribute('data-key','all');
+  document.getElementById('msg').textContent = '↑ 押してみよう';
+}
+
+function showBreakdown(val, src){
+  var rows = [
+    ['size',  '大きさ',     SIZE_PX[val.size]+'px（'+SIZE_JA[val.size]+'）', src.size,  false],
+    ['color', '色',         COLOR_JA[val.color],                            src.color, false],
+    ['label', '文字',       val.label,                                      src.label, false],
+    ['press', '押したら',   PRESS_JA[val.press],                            src.press, false],
+    ['radius','角の丸み',   val.radius+'px',                                'ai',      true],
+    ['pad',   '余白',       val.pad,                                        'ai',      true]
+  ];
+  var tb = document.getElementById('brk');
+  tb.innerHTML = '';
+  rows.forEach(function(r){
+    var tr = document.createElement('tr');
+    tr.setAttribute('data-key', r[0]);
+    tr.innerHTML =
+      '<td>'+r[1]+(r[4] ? ' <span class="fixed">（指定できない）</span>' : '')+'</td>'+
+      '<td>'+r[2]+'</td>'+
+      '<td><span class="who '+r[3]+'">'+(r[3]==='user'?'あなた':'AI')+'</span></td>';
+    tb.appendChild(tr);
+  });
+}
+
+/* ===== 3層ハイライト ===== */
+function highlight(key){
+  document.querySelectorAll('.hl').forEach(function(e){ e.classList.remove('hl'); });
+  document.getElementById('stage').classList.remove('hl');
+  if(!key) return;
+  document.querySelectorAll('[data-key="'+key+'"]').forEach(function(e){ e.classList.add('hl'); });
+  document.getElementById('stage').classList.add('hl');
+}
+document.addEventListener('click', function(e){
+  var t = e.target.closest('[data-key]');
+  if(t && t.id !== 'stage' && !e.target.closest('#stage')){ highlight(t.getAttribute('data-key')); }
+});
+
+/* ===== 操作 ===== */
+document.querySelectorAll('fieldset[data-group]').forEach(function(fs){
+  var g = fs.getAttribute('data-group');
+  fs.setAttribute('data-key', g);
+  fs.querySelectorAll('.chip').forEach(function(c){
+    c.addEventListener('click', function(){
+      fs.querySelectorAll('.chip').forEach(function(x){ x.setAttribute('aria-pressed','false'); });
+      c.setAttribute('aria-pressed','true');
+      order[g] = c.getAttribute('data-v') || null;
+    });
+  });
+});
+
+function run(prev){
+  var res = decide(order, prev);
+  lastVal = res.val;
+  render(buildLines(res.val, res.src), res.val, res.src, res);
+  highlight(null);
+}
+document.getElementById('make').addEventListener('click', function(){ run(null); });
+document.getElementById('again').addEventListener('click', function(){ run(lastVal); });
+document.getElementById('reset').addEventListener('click', function(){
+  order = {size:null, color:null, label:null, press:null};
+  lastVal = null;
+  document.querySelectorAll('fieldset[data-group]').forEach(function(fs){
+    fs.querySelectorAll('.chip').forEach(function(x){
+      x.setAttribute('aria-pressed', x.classList.contains('none') ? 'true' : 'false');
+    });
+  });
+  if(timer){ clearInterval(timer); timer=null; }
+  document.getElementById('code').innerHTML = '<span class="empty">「作って」をおすと、ここにコードが出ます。</span>';
+  document.getElementById('stage').innerHTML = '<span class="empty">まだ何もありません</span>';
+  document.getElementById('stage').removeAttribute('data-key');
+  document.getElementById('msg').textContent = '';
+  document.getElementById('brk').innerHTML = '<tr><td colspan="3" class="empty">まだありません</td></tr>';
+  document.getElementById('cu').textContent = '-';
+  document.getElementById('ca').textContent = '-';
+  document.getElementById('again').disabled = true;
+  highlight(null);
+});
+</script>
+</body>
+</html>

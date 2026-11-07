@@ -1,0 +1,2006 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ズーム顕微鏡</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..600,0..1,0&display=block" rel="stylesheet">
+<style>
+/* ===== デザインの土台 ===== */
+:root{
+  --ink:#1d2329; --sub:#5d6874; --line:rgba(20,30,40,.10);
+  --panel:rgba(255,255,255,.93); --panel-solid:#fff;
+  --accent:#1a73e8; --accent-soft:#e8f0fe;
+  --wood:#b8743f; --shadow:0 6px 24px rgba(20,30,50,.16);
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;min-height:100vh;overflow:hidden;background:#dfe3e8;color:var(--ink);-webkit-user-select:none;user-select:none;
+  font-family:"Noto Sans JP",system-ui,sans-serif;-webkit-font-smoothing:antialiased;touch-action:none}
+.ms{font-family:"Material Symbols Rounded";font-weight:400;font-style:normal;font-size:22px;line-height:1;
+  letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;direction:ltr;
+  font-variation-settings:'FILL' 0,'wght' 450,'GRAD' 0,'opsz' 24;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+#gl.dragging{cursor:grabbing}
+
+/* ===== 上のバー ===== */
+.topbar{position:fixed;left:12px;right:12px;top:10px;display:flex;align-items:center;gap:8px;pointer-events:none;z-index:5}
+.topbar .seg,.topbar .iconbtn{flex:none}
+@media (max-width:1480px){ .brand small{display:none} }
+@media (max-width:1240px){ .seg button .lbtxt{display:none} }
+.topbar > *{pointer-events:auto}
+.brand{display:flex;align-items:center;gap:8px;background:var(--panel);backdrop-filter:blur(10px);white-space:nowrap;flex:none;
+  border-radius:var(--r);padding:6px 14px 6px 10px;box-shadow:var(--shadow);height:48px}
+.brand .ms{color:var(--wood);font-size:28px}
+.brand b{font-size:17px;letter-spacing:.04em}
+.brand small{color:var(--sub);font-size:12px;margin-left:2px}
+.seg{display:flex;background:var(--panel);backdrop-filter:blur(10px);border-radius:var(--r);padding:4px;box-shadow:var(--shadow);height:48px}
+.seg button{display:flex;align-items:center;gap:5px;padding:0 11px;border-radius:10px;font-size:13.5px;font-weight:500;color:var(--sub);min-width:44px;height:40px;white-space:nowrap}
+.seg button.on{background:var(--accent-soft);color:var(--accent)}
+.seg button:hover:not(.on){background:rgba(0,0,0,.04)}
+.spacer{flex:1}
+.iconbtn{width:48px;height:48px;border-radius:var(--r);background:var(--panel);backdrop-filter:blur(10px);box-shadow:var(--shadow);
+  display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.iconbtn.on{color:var(--accent);background:var(--accent-soft)}
+
+/* ===== 左：拡大のはしご ===== */
+.ladder{position:fixed;left:12px;top:72px;bottom:96px;width:132px;background:var(--panel);backdrop-filter:blur(10px);
+  border-radius:var(--r);box-shadow:var(--shadow);z-index:4;display:flex;flex-direction:column;padding:8px 8px 8px 8px}
+.ladder .zbtn{height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:4px;font-size:13px;color:var(--sub)}
+.ladder .zbtn:hover{background:rgba(0,0,0,.05)}
+.track{position:relative;flex:1;margin:6px 0;cursor:pointer}
+.track .band{position:absolute;left:0;width:10px;border-radius:5px}
+.track .bandname{position:absolute;left:16px;font-size:11px;color:var(--sub);transform:translateY(-50%);white-space:nowrap;font-weight:500}
+.track .tick{position:absolute;right:0;font-size:11px;color:var(--sub);transform:translateY(-50%);font-variant-numeric:tabular-nums}
+.track .tick::before{content:"";position:absolute;right:calc(100% + 4px);top:50%;width:8px;height:1px;background:#9aa4ae}
+.track .marker{position:absolute;left:-4px;right:-4px;height:0;transition:top .05s linear}
+.track .marker::before{content:"";position:absolute;left:0;right:0;top:-1.5px;height:3px;background:var(--accent);border-radius:2px}
+.track .marker::after{content:"";position:absolute;left:-2px;top:-6px;border:6px solid transparent;border-left:8px solid var(--accent)}
+
+/* ===== 右：説明 ===== */
+.side{position:fixed;right:12px;top:72px;bottom:12px;width:330px;display:flex;flex-direction:column;gap:10px;z-index:4;pointer-events:none}
+.side > *{pointer-events:auto}
+.card{background:var(--panel);backdrop-filter:blur(10px);border-radius:var(--r);box-shadow:var(--shadow);padding:14px 16px}
+.card h3{margin:0;font-size:12px;color:var(--sub);font-weight:500;display:flex;align-items:center;gap:6px;letter-spacing:.04em}
+.card h3 .ms{font-size:18px}
+#infoTitle{font-size:21px;font-weight:700;margin:6px 0 2px;line-height:1.35}
+#infoRuby{font-size:12px;color:var(--sub);margin-bottom:6px}
+#infoBody{font-size:14px;line-height:1.75;margin:4px 0 0}
+#infoSize{margin-top:10px;font-size:13px;background:#f4f1ec;border-radius:10px;padding:8px 10px;line-height:1.6;display:none}
+#infoSize b{color:#8a5a2b}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.chip{font-size:12px;padding:3px 9px;border-radius:999px;background:#eef1f4;color:#3d4853}
+.chip.c-heart{background:#f6e3da;color:#8c3d1f}.chip.c-sap{background:#f6f0dc;color:#6f5a1b}
+.chip.c-early{background:#eaf3e6;color:#2f6a26}.chip.c-late{background:#efe6f5;color:#5d3482}
+.tour{flex:1;min-height:0;display:flex;flex-direction:column}
+.tour .list{overflow:auto;margin-top:8px;display:flex;flex-direction:column;gap:4px;padding-right:2px}
+.tour button{display:flex;align-items:center;gap:10px;text-align:left;padding:8px 10px;border-radius:10px;font-size:14px;min-height:44px}
+.tour button:hover{background:rgba(0,0,0,.04)}
+.tour button.on{background:var(--accent-soft);color:var(--accent)}
+.tour .num{width:26px;height:26px;border-radius:50%;background:#eef1f4;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none}
+.tour button.on .num{background:var(--accent);color:#fff}
+.tour .t2{display:block;font-size:11px;color:var(--sub)}
+details.src{font-size:11.5px;color:var(--sub);line-height:1.6}
+details.src summary{cursor:pointer;font-size:12px;padding:4px 0;list-style:none;display:flex;align-items:center;gap:4px}
+details.src summary::-webkit-details-marker{display:none}
+details.src a{color:var(--accent);word-break:break-all}
+
+/* ===== 下：ものさし ===== */
+.bottom{position:fixed;left:156px;right:354px;bottom:12px;display:flex;align-items:flex-end;gap:12px;z-index:4;pointer-events:none}
+.scalebox{background:var(--panel);backdrop-filter:blur(10px);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 14px;pointer-events:auto}
+#scalebar{height:8px;border:2px solid var(--ink);border-top:0;margin-top:4px}
+#scalelabel{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.readout{background:var(--panel);backdrop-filter:blur(10px);border-radius:var(--r);box-shadow:var(--shadow);padding:8px 14px;font-size:13px;color:var(--sub);line-height:1.6;pointer-events:auto}
+.readout b{color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
+.readout .inst{display:inline-flex;align-items:center;gap:4px;color:var(--ink);font-weight:700}
+.hint{margin-left:auto;font-size:12px;color:#3d4853;background:rgba(255,255,255,.75);border-radius:10px;padding:6px 10px;transition:opacity 1s;pointer-events:auto}
+
+/* ===== 照準・ラベル ===== */
+#cross{position:fixed;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;pointer-events:none;z-index:3}
+#cross::before,#cross::after{content:"";position:absolute;background:rgba(255,255,255,.95);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
+#cross::before{left:22px;top:0;width:2px;height:16px;box-shadow:0 30px 0 0 rgba(255,255,255,.95),0 0 0 1px rgba(0,0,0,.3)}
+#cross::after{top:22px;left:0;height:2px;width:16px;box-shadow:30px 0 0 0 rgba(255,255,255,.95),0 0 0 1px rgba(0,0,0,.3)}
+.lbl{position:fixed;z-index:3;pointer-events:none;transform:translate(-50%,-50%);transition:opacity .3s}
+.lbl span{display:inline-block;background:rgba(255,255,255,.95);border-radius:10px;padding:5px 11px;font-size:14px;font-weight:700;box-shadow:0 2px 10px rgba(0,0,0,.18);white-space:nowrap}
+.lbl small{display:block;font-size:11px;font-weight:500;color:var(--sub)}
+
+/* ===== 分子の表し方 ===== */
+.molbar{position:fixed;top:68px;transform:translateX(-50%);z-index:4;display:none;flex-direction:column;align-items:center;gap:6px}
+.molbar.show{display:flex}
+.molbar .legend{background:var(--panel);backdrop-filter:blur(10px);border-radius:999px;box-shadow:var(--shadow);padding:5px 14px;font-size:12px;color:#3d4853;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.molbar .legend i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-left:6px}
+.molbar .lsep{width:1px;height:14px;background:var(--line);margin:0 4px}
+/* ===== お知らせ・ログ ===== */
+.modal{position:fixed;inset:0;background:rgba(20,26,32,.35);display:none;align-items:center;justify-content:center;z-index:20}
+.modal.show{display:flex}
+.modal .box{background:#fff;border-radius:18px;box-shadow:var(--shadow);max-width:560px;width:calc(100% - 32px);padding:22px 24px;max-height:90vh;overflow:auto}
+.modal h2{margin:0 0 8px;font-size:20px;display:flex;align-items:center;gap:8px}
+.modal p,.modal li{font-size:14px;line-height:1.8}
+.modal .ok{margin-top:12px;background:var(--accent);color:#fff;border-radius:10px;padding:10px 18px;font-weight:700;min-height:44px}
+#fatal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:30;background:#eef1f4}
+#fatal .box{background:#fff;border-radius:18px;padding:24px;max-width:520px;box-shadow:var(--shadow);font-size:14px;line-height:1.8}
+.logbtn{position:fixed;left:12px;bottom:12px;z-index:6;width:132px;height:44px;border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow);
+  display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--sub)}
+#logpanel{position:fixed;left:12px;bottom:64px;width:min(640px,calc(100% - 24px));height:42vh;background:#111820;color:#cfe3d0;z-index:25;
+  border-radius:12px;box-shadow:var(--shadow);display:none;flex-direction:column;font:12px/1.5 ui-monospace,Menlo,monospace}
+#logpanel.show{display:flex}
+#logpanel .lh{display:flex;gap:8px;padding:8px;border-bottom:1px solid #2a3440}
+#logpanel .lh button{background:#253141;color:#dfe9f3;border-radius:8px;padding:6px 10px;font-size:12px}
+#logtext{flex:1;overflow:auto;padding:8px 10px;white-space:pre-wrap;word-break:break-all;margin:0;-webkit-user-select:text;user-select:text}
+
+@media (max-width: 900px){
+  .side{top:auto;height:44vh;left:12px;right:12px;width:auto;flex-direction:row;overflow-x:auto}
+  .side .card{min-width:280px}
+  .ladder{width:58px}.track .bandname{display:none}.ladder .zbtn span.t{display:none}
+  .bottom{left:80px;right:12px;bottom:calc(44vh + 20px)}
+  .brand small{display:none}.hint{display:none}
+}
+</style>
+</head>
+<body>
+
+<canvas id="gl"></canvas>
+<div id="cross"></div>
+<div id="labels"></div>
+
+<!-- ===== 上のバー ===== -->
+<div class="topbar">
+  <div class="brand"><span class="ms">biotech</span><b>ズーム顕微鏡</b><small>材料の中をのぞく</small></div>
+  <div class="seg" id="matSeg">
+    <button data-mat="wood" class="on"><span class="ms">forest</span>木材</button>
+    <button data-mat="metal"><span class="ms">hardware</span>金属</button>
+    <button data-mat="plastic"><span class="ms">view_in_ar</span>プラスチック</button>
+  </div>
+  <div class="spacer"></div>
+  <div class="seg" id="modeSeg">
+    <button data-mode="0" class="on" title="倍率に合わせて、その道具で見たときの見え方にする"><span class="ms">auto_awesome</span>おまかせ</button>
+    <button data-mode="1"><span class="ms">palette</span>カラー</button>
+    <button data-mode="2"><span class="ms">blur_on</span>電子顕微鏡</button>
+  </div>
+  <div class="seg" id="viewSeg">
+    <button data-view="iso" title="斜めから"><span class="ms">deployed_code</span></button>
+    <button data-view="top" title="真上から（木口）"><span class="ms">crop_square</span></button>
+    <button data-view="x" title="柾目の正面"><span class="ms">view_column</span></button>
+    <button data-view="z" title="板目の正面"><span class="ms">view_week</span></button>
+    <button data-view="rot" id="rotBtn" title="1本指で回す"><span class="ms">3d_rotation</span></button>
+  </div>
+  <button class="iconbtn on" id="lblBtn" title="ラベル"><span class="ms">label</span></button>
+  <button class="iconbtn" id="helpBtn" title="使い方"><span class="ms">help</span></button>
+</div>
+
+<!-- ===== 左：拡大のはしご ===== -->
+<div class="ladder">
+  <button class="zbtn" id="zin"><span class="ms">zoom_in</span><span class="t">拡大</span></button>
+  <div class="track" id="track"><div class="marker" id="marker"></div></div>
+  <button class="zbtn" id="zout"><span class="ms">zoom_out</span><span class="t">縮小</span></button>
+</div>
+
+<!-- ===== 右：説明とツアー ===== -->
+<div class="side">
+  <div class="card" id="infoCard">
+    <h3><span class="ms">my_location</span>いま照準の下にあるもの</h3>
+    <div id="infoTitle">—</div>
+    <div id="infoRuby"></div>
+    <div class="chips" id="infoChips"></div>
+    <p id="infoBody"></p>
+    <div id="infoSize"></div>
+  </div>
+  <div class="card tour">
+    <h3><span class="ms">tour</span>見どころツアー</h3>
+    <div class="list" id="tourList"></div>
+    <details class="src">
+      <summary><span class="ms" style="font-size:16px">menu_book</span>出典・この模型について</summary>
+      <div id="srcText"></div>
+    </details>
+  </div>
+</div>
+
+<!-- ===== 下：ものさし ===== -->
+<div class="bottom">
+  <div class="scalebox"><div id="scalelabel">1 mm</div><div id="scalebar" style="width:100px"></div></div>
+  <div class="readout">見る道具 <span class="inst" id="inst">肉眼</span><br>視野の幅 <b id="fieldTxt">—</b>　画面上で <b id="magTxt">—</b></div>
+  <div class="hint" id="hint">ドラッグ：動かす　ホイール／ピンチ：拡大・縮小　右ドラッグ・Shift＋ドラッグ：回す</div>
+</div>
+
+<!-- ===== 分子の表し方（分子モデルの倍率のときだけ） ===== -->
+<div class="molbar" id="molBar">
+  <div class="seg" id="molSeg">
+    <button data-st="stick" class="on"><span class="ms">hub</span>骨組み</button>
+    <button data-st="sphere"><span class="ms">bubble_chart</span>球</button>
+  </div>
+  <div class="legend"><i style="background:#5e6168"></i>炭素 C<i style="background:#db2b21"></i>酸素 O<i style="background:#efefef;border:1px solid #bbb"></i>水素 H
+    <span class="lsep"></span><i style="background:#85593a"></i>リグニンの炭素<i style="background:#787347"></i>ヘミセルロースの炭素<i style="background:#29a061"></i>注目の1本</div>
+</div>
+<button class="logbtn" id="logBtn"><span class="ms" style="font-size:18px">terminal</span>ログ</button>
+<div id="logpanel"><div class="lh"><button id="logCopy">全文をコピー</button><button id="logClose">閉じる</button></div><pre id="logtext"></pre></div>
+
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
+<div id="fatal"><div class="box" id="fatalBox"></div></div>
+
+<script>
+'use strict';
+// =====================================================================
+// [S0] 画面組み込みのログ（Chromebook では検証ツールが開けないため）
+// =====================================================================
+const LOG = [];
+(function(){
+  const out = document.getElementById('logtext');
+  function push(kind, args){
+    const t = new Date().toTimeString().slice(0,8);
+    const msg = Array.from(args).map(a => {
+      if (a instanceof Error) return a.message + '\n' + (a.stack || '');
+      if (typeof a === 'object') { try { return JSON.stringify(a); } catch(e) { return String(a); } }
+      return String(a);
+    }).join(' ');
+    LOG.push(`[${t}] ${kind} ${msg}`);
+    if (LOG.length > 400) LOG.shift();
+    out.textContent = LOG.join('\n');
+  }
+  ['log','info','warn','error'].forEach(k => {
+    const orig = console[k].bind(console);
+    console[k] = function(){ push(k.toUpperCase(), arguments); orig.apply(null, arguments); };
+  });
+  window.addEventListener('error', e => push('UNCAUGHT', [e.message + ' @' + e.filename + ':' + e.lineno]));
+  window.addEventListener('unhandledrejection', e => push('PROMISE', [e.reason]));
+  document.getElementById('logBtn').onclick = () => document.getElementById('logpanel').classList.toggle('show');
+  document.getElementById('logClose').onclick = () => document.getElementById('logpanel').classList.remove('show');
+  document.getElementById('logCopy').onclick = () => {
+    const txt = LOG.join('\n') + '\n\nUA: ' + navigator.userAgent;
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(
+      () => console.info('ログをコピーしました'),
+      () => { const r = document.createRange(); r.selectNodeContents(out); getSelection().removeAllRanges(); getSelection().addRange(r); });
+  };
+})();
+
+// =====================================================================
+// [S1] ユーティリティ（ハッシュとノイズは GLSL と同じ式。結果も一致させる）
+// =====================================================================
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const mix = (a, b, t) => a + (b - a) * t;
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const fract = x => x - Math.floor(x);
+const gmod = (x, y) => x - y * Math.floor(x / y);
+const V = {
+  add:(a,b)=>({x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}), sub:(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z}),
+  mul:(a,s)=>({x:a.x*s,y:a.y*s,z:a.z*s}), dot:(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z,
+  cross:(a,b)=>({x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x}),
+  len:a=>Math.hypot(a.x,a.y,a.z), norm:a=>{const l=Math.hypot(a.x,a.y,a.z)||1;return{x:a.x/l,y:a.y/l,z:a.z/l}},
+  lerp:(a,b,t)=>({x:mix(a.x,b.x,t),y:mix(a.y,b.y,t),z:mix(a.z,b.z,t)})
+};
+function hu(x){ x >>>= 0; x ^= x >>> 16; x = Math.imul(x, 0x7feb352d) >>> 0; x ^= x >>> 15; x = Math.imul(x, 0x846ca68b) >>> 0; x ^= x >>> 16; return x >>> 0; }
+function hc(a, b){ return hu((Math.imul(a >>> 0, 0x9E3779B1) ^ hu(((b >>> 0) + 0x632BE5AB) >>> 0)) >>> 0); }
+const h2 = (a, b) => (hc(a, b) >>> 8) / 16777216;
+const h3 = (a, b, c) => (hc(hc(a, b), c) >>> 8) / 16777216;
+const hs = (u, salt) => (hc(u, salt) >>> 8) / 16777216;
+function vnoise(x, y){
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const a = h2(ix, iy), b = h2(ix + 1, iy), c = h2(ix, iy + 1), d = h2(ix + 1, iy + 1);
+  return mix(mix(a, b, ux), mix(c, d, ux), uy);
+}
+function sdRB2(px, py, bx, by, r){
+  const qx = Math.abs(px) - bx + r, qy = Math.abs(py) - by + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+}
+function sdRB3(px, py, pz, bx, by, bz, r){
+  const qx = Math.abs(px) - bx + r, qy = Math.abs(py) - by + r, qz = Math.abs(pz) - bz + r;
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, Math.max(qy, qz)), 0) - r;
+}
+function fmtLen(um){
+  if (um >= 10000) return trimNum(um / 10000) + ' cm';
+  if (um >= 1000) return trimNum(um / 1000) + ' mm';
+  if (um >= 1) return trimNum(um) + ' µm';
+  return trimNum(um * 1000) + ' nm';
+}
+function trimNum(v){ return v >= 100 ? Math.round(v).toLocaleString() : v >= 10 ? (Math.round(v * 10) / 10).toString() : (Math.round(v * 100) / 100).toString(); }
+
+// =====================================================================
+// [S2] 定数：木材モデル（単位はすべて µm）。シェーダーにも同じ値を埋め込む
+// =====================================================================
+const WD = {
+  X: 40000, Y: 40000, Z: 40000, R: 20,       // ブロック 4cm 角。上面が木口。角の丸み 20µm
+  PX: 43000, PZ: -60000,                      // 髄（年輪の中心）の位置。柾目の面が細胞の列にわずかに斜めに当たるよう 3mm ずらす
+  RMID: 84000, TAPER: 0.04, WF: 35,           // 弧長の基準半径／幹の細りと木取りの傾き／放射方向の列の幅
+  HEART: 88000, WHITE: 2200                   // 心材の外周（r_eff）／白線帯の幅
+};
+// 年輪の境界（髄からの距離）。中心ほど広く、外ほど狭い
+const RINGS = (() => {
+  const B = [0]; let r = 0;
+  for (let n = 0; n < 47; n++) { let w = 2800 + 6000 * Math.exp(-r / 35000); w *= 0.75 + 0.5 * h2(n, 31); r += w; B.push(r); }
+  return B;
+})();
+
+// =====================================================================
+// [S3] 状態（1か所にまとめる）
+// =====================================================================
+const S = {
+  mat: 'wood', mode: 0, labels: true, rotMode: false, molStyle: 'stick',
+  F: { x: WD.X / 2, y: -WD.Y / 2, z: WD.Z / 2 },  // 視野の中心（照準）。止まっているときは試料の表面上にある
+  field: 135000,                   // 視野の幅（µm）＝画面の横幅
+  az: 45, el: 30,                  // 見る向き（度）
+  A: null,                         // アンカー（照準の下の表面の点）
+  dirty: true, lastMove: 0, accN: 0, accMax: 12, lastScale: 0,
+  tween: null, tourIdx: -1, probeTimer: 0
+};
+const FIELD_MAX = 160000, FIELD_MIN = 0.0025;  // 4cm のブロックから 2.5nm（分子）まで
+
+// =====================================================================
+// [S4] 木材モデル（JS・倍精度）── シェーダーの cellFn と同じ式
+// =====================================================================
+const Wood = {
+  wave(s, y){ return 320 * (2 * vnoise(s / 9000, y / 16000) - 1) + 90 * (2 * vnoise(s / 2600 + 17, y / 5200) - 1); },
+  polar(p){
+    const dx = p.x - WD.PX, dz = p.z - WD.PZ;
+    const r = Math.hypot(dx, dz), th = Math.atan2(-dx, dz), s = WD.RMID * th;
+    const rEff = r + WD.TAPER * p.y + this.wave(s, p.y);
+    return { r, th, s, rEff, dx, dz };
+  },
+  ringOf(rEff){
+    let lo = 0, hi = RINGS.length - 1;
+    if (rEff < RINGS[0]) return 0;
+    if (rEff >= RINGS[hi]) return hi - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (RINGS[m] <= rEff) lo = m; else hi = m; }
+    return lo;
+  },
+  fileB(j, rg){ return 2.2 * Math.sin(rg * 0.021 + 6.2831 * h2(j, 3)) + 1.3 * Math.sin(rg * 0.0061 + 6.2831 * h2(j, 4)); },
+  // 細胞の距離関数。sd は「固体までの距離」（内こう＝空洞の中で正、壁の中で負）
+  cellFn(rho, Wn, ring, s, FB, y, YB, rg, yg15){
+    const WF = WD.WF;
+    const phi = clamp(rho / Wn, 0, 1);
+    const se = 38 + 8 * h2(ring, 11), sl = 12 + 5 * h2(ring, 12);
+    const A1 = Wn / se, A2 = (Wn / sl - Wn / se) / 6;
+    const jf = Math.floor(s / WF);
+    let jl = jf;
+    let b0 = jf * WF + this.fileB(FB + jl, rg), b1 = (jf + 1) * WF + this.fileB(FB + jl + 1, rg);
+    if (s < b0) { jl -= 1; b1 = b0; b0 = jl * WF + this.fileB(FB + jl, rg); }
+    else if (s >= b1) { jl += 1; b0 = b1; b1 = (jl + 1) * WF + this.fileB(FB + jl + 1, rg); }
+    const fid = FB + jl;
+    const sc = rg / WD.RMID;   // 角度で決めた列の幅を、その半径での実寸に直す
+    // 放射組織（列ごとに一部。縦には途切れ途切れ）
+    let rayW = 0, ry0 = 0, rH = 0;
+    const ySlot = Math.floor(y / 200), q = YB + ySlot;
+    if (h2(fid, 21) < 0.2 && h3(fid, q, 22) < 0.7) {
+      rH = (2 + Math.floor(h3(fid, q, 23) * 9)) * 18;
+      ry0 = ySlot * 200 + 4 + h3(fid, q, 24) * (192 - rH);
+      rayW = 13 * smooth(ry0 - 14, ry0 + 1, y) * (1 - smooth(ry0 + rH - 1, ry0 + rH + 14, y));
+    }
+    if (rayW > 0.5 && s < b0 + rayW) {
+      const rcl = 95, off = h3(fid, ring, 25) * rcl;
+      const kr = Math.floor((rho + off) / rcl);
+      const r0 = Math.max(kr * rcl - off, 0), r1 = Math.min(kr * rcl - off + rcl, Wn);
+      const inR = (y >= ry0 && y <= ry0 + rH);
+      const qx = rho - 0.5 * (r0 + r1), qy = (s - (b0 + 0.5 * rayW)) * sc, qz = gmod(y - ry0, 18) - 9;
+      const hx = Math.max(0.5 * (r1 - r0) - 0.9, 0.25), hy = Math.max(0.5 * rayW * sc - 0.9, 0.25), hz = Math.max(9 - 0.9, 0.25);
+      let lum = sdRB3(qx, qy, qz, hx, hy, hz, Math.min(1.2, Math.min(hy, hz) * 0.6));
+      if (!inR) lum = Math.max(lum, 0.6);
+      return { sd: -lum, phi, kind: 1, depth: Math.min(0.5 * (r1 - r0) - Math.abs(qx), 0.5 * rayW * sc - Math.abs(qy), 9 - Math.abs(qz)),
+               w: 0.9, cs: rcl, fid, ring, pit: 0, hr: 0.5 * (r1 - r0), ht: 0.5 * rayW * sc, xr: qx, xt: qy };
+    }
+    // 仮道管
+    const tb0 = b0 + rayW, ct = 0.5 * (tb0 + b1), ht = 0.5 * (b1 - tb0) * sc;
+    const o = h3(fid, ring, 5);
+    const p5 = Math.pow(phi, 5);
+    const u = A1 * phi + A2 * p5 * phi + o;
+    const k = Math.floor(u), fu = u - k;
+    const cs = Wn / (A1 + 6 * A2 * p5);
+    const r0 = Math.max(rho - fu * cs, 0), r1 = Math.min(rho - fu * cs + cs, Wn);
+    const cr = 0.5 * (r0 + r1), hr = 0.5 * (r1 - r0);
+    const cid = hc(hc(fid, ring), k);
+    const xr = rho - cr, xt = (s - ct) * sc;
+    const hcell = hs(cid, 6);
+    const resin = hs(cid, 9) < (0.006 + 0.03 * smooth(0.75, 1.0, phi));
+    let w = mix(1.5, 5.4, smooth(0.64, 0.97, phi)) * (0.88 + 0.24 * hcell);
+    if (resin) w *= 0.55;
+    let lr = Math.max(hr - w, 0.35), lt = Math.max(ht - w, 0.35);
+    const yo = hs(cid, 7) * 3000;
+    const ty = gmod(yg15 - yo, 3000), e = Math.min(ty, 3000 - ty), tf = smooth(0, 70, e);
+    lt = Math.max(lt * mix(0.08, 1, tf), 0.3); lr = Math.max(lr * mix(0.45, 1, tf), 0.3);
+    let ltp = lt, ltm = lt, pit = 0;
+    if (!resin) {
+      const sy = Math.floor(y / 25), qp = YB * 8 + sy;
+      const pr = mix(0.6, 0.12, smooth(0.6, 0.95, phi));
+      const R = Math.min(9, hr * 0.6), ap = R * 0.26, H = Math.min(1.5, R * 0.18);
+      for (let sd = 0; sd < 2; sd++) {
+        const pid = hc(hc(cid, qp), sd);
+        if (hs(pid, 8) < pr) {
+          const yc = sy * 25 + 12.5 + (hs(pid, 10) - 0.5) * 5;
+          const xc = (hs(pid, 11) - 0.5) * hr * 0.3;
+          const rr = Math.hypot(xr - xc, y - yc);
+          const dome = H * Math.sqrt(Math.max(0, 1 - rr * rr / (R * R)));
+          const hole = smooth(ap * 1.9, ap * 0.9, rr);
+          const v = mix(lt - dome, ht - 0.15, hole);
+          if (sd === 0) ltp = v; else ltm = v;
+          if (rr < R) pit = Math.max(pit, 1 - rr / R);
+        }
+      }
+    }
+    const ot = 0.5 * (ltp - ltm), lt2 = 0.5 * (ltp + ltm);
+    const rc = clamp(Math.min(lr, lt2) * 0.45, 0.2, 6);
+    const lum = sdRB2(xr, xt - ot, lr, lt2, rc);
+    let sd = -lum, kind = 0;
+    if (resin) {
+      const ys = gmod(yg15 - hs(cid, 12) * 140, 140) - 70;
+      const blob = sdRB3(xr, xt, ys, lr * 0.82, lt * 0.82, 60, Math.min(lr, lt) * 0.75);
+      if (blob < sd) { sd = blob; kind = 2; }
+    }
+    return { sd, phi, kind, depth: Math.min(hr - Math.abs(xr), ht - Math.abs(xt)), w, cs, fid, ring, pit, resin, hr, ht, xr, xt };
+  },
+  cellAtWorld(p){
+    const po = this.polar(p);
+    const ring = this.ringOf(po.rEff);
+    const rho = po.rEff - RINGS[ring], Wn = RINGS[ring + 1] - RINGS[ring];
+    const c = this.cellFn(rho, Wn, ring, po.s, 0, p.y, 0, po.rEff, p.y);
+    c.rEff = po.rEff; c.rho = rho; c.Wn = Wn; c.po = po;
+    return c;
+  },
+  // 照準の下の細胞壁を「平面」として切り出す（細胞壁の中へ入るときの座標系）
+  //   n：壁に垂直（年輪の半径方向 または 接線方向。向きは固定）、b：壁に沿った水平方向
+  //   a：細胞間層（ML）のまん中からの距離（+側の細胞の壁が a>0）
+  wallFrame(A){
+    const c = this.cellAtWorld(A);
+    const po = c.po;
+    const er = { x: po.dx / po.r, y: 0, z: po.dz / po.r };
+    const et = { x: -Math.cos(po.th), y: 0, z: -Math.sin(po.th) };
+    const dR = c.hr - Math.abs(c.xr), dT = c.ht - Math.abs(c.xt);
+    const radialWall = dR < dT;
+    const canon = radialWall ? er : et;
+    const sgn = Math.sign(radialWall ? c.xr : c.xt) || 1;
+    const nOut = V.mul(canon, sgn);                    // この細胞から見て、となりの細胞の向き
+    const dist = radialWall ? dR : dT;
+    const side = -sgn;                                 // この細胞は canon の -sgn 側にある
+    const Q = V.add(A, V.mul(nOut, Math.max(dist, 0) + 0.8));
+    const cn = this.cellAtWorld(Q);
+    const wp = side > 0 ? c.w : cn.w, wm = side > 0 ? cn.w : c.w;
+    const b = V.norm(V.cross({ x: 0, y: 1, z: 0 }, canon));
+    return { n: canon, b, aA: side * dist, wp, wm, kind: c.kind, cell: c, radialWall };
+  },
+  sdBlock(p){
+    const R = WD.R;
+    const qx = p.x - WD.X + R, qy = p.y + R, qz = p.z - WD.Z + R;
+    const dNear = Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, Math.max(qy, qz)), 0) - R;
+    const dFar = Math.max(-p.x, -WD.Y - p.y, -p.z);
+    return Math.max(dNear, dFar);
+  },
+  sdf(p){ return Math.max(this.sdBlock(p), this.cellAtWorld(p).sd); },
+  // 視線に沿って表面を探す（倍精度）
+  raycast(F, dir, field){
+    const inv = { x: 1 / dir.x, y: 1 / dir.y, z: 1 / dir.z };
+    const t0 = { x: (0 - F.x) * inv.x, y: (-WD.Y - F.y) * inv.y, z: (0 - F.z) * inv.z };
+    const t1 = { x: (WD.X - F.x) * inv.x, y: (0 - F.y) * inv.y, z: (WD.Z - F.z) * inv.z };
+    const tn = Math.max(Math.min(t0.x, t1.x), Math.min(t0.y, t1.y), Math.min(t0.z, t1.z));
+    const tf = Math.min(Math.max(t0.x, t1.x), Math.max(t0.y, t1.y), Math.max(t0.z, t1.z));
+    if (tn > tf) return null;
+    let t = tn - WD.R * 1.5;
+    const eps = Math.max(field * 2e-4, 1e-5);
+    const useCells = field < 6000;
+    for (let i = 0; i < 260; i++) {
+      const p = V.add(F, V.mul(dir, t));
+      const d = useCells ? this.sdf(p) : this.sdBlock(p);
+      if (d < eps) return { p, t };
+      t += Math.max(d * 0.7, eps * 0.5);
+      if (t > tf + 1) return null;
+    }
+    return { p: V.add(F, V.mul(dir, t)), t };
+  },
+  // シェーダーに渡すアンカー基準の値（倍精度で計算して小さな数にして渡す）
+  anchorUniforms(A){
+    const po = this.polar(A);
+    const FB = Math.floor(po.s / WD.WF) - 8;
+    const YB = Math.floor(A.y / 200) - 1;
+    const m15 = ((YB % 15) + 15) % 15;
+    return {
+      VA: [po.dx, po.dz], RA: po.r, SAbs: po.s, YAbs: A.y, WaveA: this.wave(po.s, A.y), REffA: po.rEff,
+      RelB: RINGS.map(b => b - po.rEff), SRed: po.s - FB * WD.WF, FB, YRed: A.y - YB * 200, YB, Y15: A.y - YB * 200 + m15 * 200,
+      HeartRel: WD.HEART - po.rEff,
+      PMax: [WD.X - A.x, 0 - A.y, WD.Z - A.z], PMin: [0 - A.x, -WD.Y - A.y, 0 - A.z]
+    };
+  }
+};
+
+// =====================================================================
+// [S4b] 細胞壁の中（ミクロフィブリルと分子）── 単位は nm。シェーダーの fibril() と同じ格子
+// =====================================================================
+const DEEP = {
+  DA: 4.3, DE: 4.9, RF: 1.55,          // 繊維の並び（壁に垂直・壁に沿って）の間隔と半径
+  MFA: [70, 12, 78],                   // S1・S2・S3 の傾き（度）。出典の範囲の中の代表値
+  RES: 0.519,                          // ブドウ糖1個分の長さ（セルロース Iβ の c 軸の半分）
+  EP: 4.9 * 4096, FP: 0.519 * 2 * 1024 // 位相を折り返す周期（float でも精度が落ちないように）
+};
+function deepLayer(a, wp, wm){        // -1:細胞間層 -2:一次壁 0..2:+側の S1..S3 3..5:-側
+  const d = Math.abs(a), w = a >= 0 ? wp : wm, base = a >= 0 ? 0 : 3;
+  if (d < 100) return -1; if (d < 180) return -2; if (d < 430) return base; if (d < w - 100) return base + 1; return base + 2;
+}
+// 照準の壁の座標系（軸は同じ壁にいる間は固定する。わずかな回転で位相が飛ぶのを防ぐ）
+function makeDeep(A, prev){
+  const fr = Wood.wallFrame(A);
+  let n = fr.n, b = fr.b;
+  if (prev && V.dot(prev.n, n) > 0.9999) { n = prev.n; b = prev.b; }
+  const bA = V.dot(A, b) * 1000, cA = A.y * 1000;
+  const M = [], EA = [], FA = [];
+  for (let L = 0; L < 6; L++) {
+    const m = DEEP.MFA[L % 3] * Math.PI / 180, sg = L < 3 ? 1 : -1;
+    M.push(m);
+    EA.push(gmod(bA * Math.cos(m) - sg * cA * Math.sin(m), DEEP.EP));
+    FA.push(gmod(sg * bA * Math.sin(m) + cA * Math.cos(m), DEEP.FP));
+  }
+  // a はセル形状から（倍精度）。ただし同じ壁なら n に沿った移動量で連続にする
+  let aA = fr.aA * 1000;
+  if (prev && prev.n === n && prev.A) {
+    const da = V.dot(V.sub(A, prev.A), n) * 1000;
+    if (Math.abs(prev.aA + da - aA) < 50) aA = prev.aA + da;
+  }
+  return { n, b, aA, wp: fr.wp * 1000, wm: fr.wm * 1000, M, EA, FA, A: { ...A }, kind: fr.kind, cell: fr.cell };
+}
+// 格子の繊維（シェーダーの fibril() と同じ）。a,e は nm
+function fibrilAt(r, cl, L){
+  const id = hc(hc(r | 0, cl | 0), L + 7);
+  if (hs(id, 1) < 0.07) return null;
+  const stag = gmod(r, 2) * 0.5 * DEEP.DE;
+  return { a: (r + 0.5) * DEEP.DA + (hs(id, 2) - 0.5) * 0.9, e: (cl + 0.5) * DEEP.DE + stag + (hs(id, 3) - 0.5) * 0.9,
+           rad: DEEP.RF * (0.9 + 0.2 * hs(id, 4)), id };
+}
+function nearestFibril(a, e, L){
+  const r0 = Math.floor(a / DEEP.DA - 0.5);
+  let best = null;
+  for (let dr = 0; dr < 2; dr++) {
+    const r = r0 + dr, stag = gmod(r, 2) * 0.5 * DEEP.DE, c0 = Math.floor((e - stag) / DEEP.DE - 0.5);
+    for (let dc = 0; dc < 2; dc++) {
+      const f = fibrilAt(r, c0 + dc, L); if (!f) continue;
+      const d = Math.hypot(a - f.a, e - f.e) - f.rad;
+      if (!best || d < best.d) best = { ...f, d };
+    }
+  }
+  return best;
+}
+
+// ---- 分子の型（Å）。鎖の向きが y、環はシートの面（x-y）、z はシートに垂直
+// ブドウ糖1個分（セルロースの繰り返しの半分）：いす形の環 C1–C5,O5 と、O2・O3・C6・O6・つなぎの O4、水素
+const GLC = [
+  ['C', 0, 1.10, 0.25], ['C', 1.30, 1.85, -0.25], ['C', 1.30, 3.35, 0.25], ['C', 0, 4.10, -0.25], ['C', -1.30, 3.35, 0.25], ['O', -1.30, 1.85, -0.25],
+  ['O', 2.65, 1.25, -0.10], ['O', 2.60, 4.05, 0.10], ['C', -2.65, 4.00, 0.00], ['O', -3.00, 5.35, 0.30], ['O', 0.90, 5.19, 0.00],
+  ['H', 0, 1.10, 1.34], ['H', 1.30, 1.85, -1.34], ['H', 1.30, 3.35, 1.34], ['H', 0, 4.10, -1.34], ['H', -1.30, 3.35, 1.34],
+  ['H', -2.95, 3.55, -0.95], ['H', -3.35, 3.55, 0.75], ['H', 3.35, 1.85, -0.10], ['H', 3.20, 4.70, 0.20], ['H', -3.90, 5.50, 0.20]
+];
+// リグニンの単位（針葉樹のグアイアシル核）：ベンゼン環＋3炭素の側鎖＋メトキシ基＋OH
+const LIG = [
+  ['C', 0, 1.40, 0], ['C', 1.21, 0.70, 0], ['C', 1.21, -0.70, 0], ['C', 0, -1.40, 0], ['C', -1.21, -0.70, 0], ['C', -1.21, 0.70, 0],
+  ['C', 0, 2.91, 0], ['C', 1.25, 3.70, 0.3], ['C', 1.25, 5.20, 0], ['O', 2.45, 5.95, 0.2],
+  ['O', 2.40, -1.40, 0], ['C', 3.60, -0.70, 0], ['O', 0, -2.76, 0],
+  ['H', 2.15, 1.25, 0], ['H', -2.15, -1.25, 0], ['H', -2.15, 1.25, 0], ['H', -0.90, 3.40, 0.6], ['H', 2.15, 3.15, 0.8],
+  ['H', 0.35, 5.75, 0.6], ['H', 1.10, 5.40, -1.0], ['H', 4.45, -1.35, 0], ['H', 3.60, -0.10, 0.9], ['H', 3.60, -0.10, -0.9],
+  ['H', 3.20, 5.40, 0.4], ['H', 0.85, -3.20, 0]
+];
+const ELEM = { C: { r: 0.170, c: [0.37, 0.38, 0.41] }, O: { r: 0.152, c: [0.86, 0.17, 0.13] }, H: { r: 0.110, c: [0.94, 0.94, 0.94] } };
+// 表し方：骨組み（球と棒）は原子を小さく、結合を棒で。球（空間充填）はファンデルワールス半径の 0.8 倍
+const MOL_STYLE = { stick: { atom: 0.30, bond: 0.017 }, sphere: { atom: 0.80, bond: 0 } };
+// 型から結合を自動で取る（重い原子どうし 1.7Å 未満、水素とは 1.25Å 未満）
+function tplBonds(T){
+  const out = [];
+  for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
+    const a = T[i], b = T[j];
+    if (a[0] === 'H' && b[0] === 'H') continue;
+    const d = Math.hypot(a[1] - b[1], a[2] - b[2], a[3] - b[3]);
+    if (d < (a[0] === 'H' || b[0] === 'H' ? 1.25 : 1.7)) out.push([i, j]);
+  }
+  return out;
+}
+const COMP_C = { cel: [0.37, 0.38, 0.41], lig: [0.52, 0.36, 0.22], hem: [0.47, 0.45, 0.28] };
+// 18本の鎖の断面（234432 の並び）：シート間隔 0.39nm、シート内の鎖の間隔 0.82nm、交互に c/4 ずらす
+const CHAINS = (() => {
+  const cnt = [2, 3, 4, 4, 3, 2], out = [];
+  cnt.forEach((n, k) => { for (let i = 0; i < n; i++) out.push({ a: (k - 2.5) * 0.39, e: (i - (n - 1) / 2) * 0.82, f: (k % 2) * 0.26 }); });
+  return out;
+})();
+const GLC_B = tplBonds(GLC), LIG_B = tplBonds(LIG);
+function rotFromHash(id){   // ハッシュからランダムな回転
+  const u1 = hs(id, 31), u2 = hs(id, 32) * 2 * Math.PI, u3 = hs(id, 33) * 2 * Math.PI;
+  const q = [Math.sqrt(1 - u1) * Math.sin(u2), Math.sqrt(1 - u1) * Math.cos(u2), Math.sqrt(u1) * Math.sin(u3), Math.sqrt(u1) * Math.cos(u3)];
+  const [x, y, z, w] = q;
+  return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)];
+}
+// 原子と結合を並べる（照準のまわりの、見える表面から浅いところだけ）
+//   atoms：x,y,z(nm, 生成時のアンカー基準), vdW 半径, r,g,b, 深さの暗さ
+//   bonds：端A xyz, 半径係数, 端B xyz, 色A rgb, 深さ, 色B rgb
+function buildAtoms(D, F, field){
+  const atoms = [], bonds = [];
+  const Rn = field * 1000 * 0.85;
+  const A = D.A;
+  const PMax = [(WD.X - A.x) * 1000, (0 - A.y) * 1000, (WD.Z - A.z) * 1000];
+  const PMin = [(0 - A.x) * 1000, (-WD.Y - A.y) * 1000, (0 - A.z) * 1000];
+  const R = WD.R * 1000;
+  const sdB = (x, y, z) => {
+    const qx = x - PMax[0] + R, qy = y - PMax[1] + R, qz = z - PMax[2] + R;
+    const dN = Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, Math.max(qy, qz)), 0) - R;
+    return Math.max(dN, PMin[0] - x, PMin[1] - y, PMin[2] - z);
+  };
+  const slabOf = a => Math.max(a - D.wp, -D.wm - a);
+  const inside = (x, y, z, a) => Math.max(sdB(x, y, z), slabOf(a));   // 負なら材料の中
+  const Fo = V.mul(V.sub(F, A), 1000);
+  const aF = D.aA + V.dot(Fo, D.n), bF = V.dot(Fo, D.b), cF = Fo.y;
+  const colOf = (el, comp) => el === 'C' ? (comp === 'focus' ? [0.16, 0.62, 0.38] : COMP_C[comp]) : ELEM[el].c;
+  // 1つの分子（型）を置く。xf(x,y,z Å) → [x,y,z nm, a nm]、keep(x,y,z,a) → 深さ（null なら置かない）
+  function emit(T, TB, xf, keep, comp, extra){
+    const P = new Array(T.length);
+    for (let i = 0; i < T.length; i++) {
+      const [el, x, y, z] = T[i];
+      const q = xf(x, y, z);
+      const dep = keep(q[0], q[1], q[2], q[3]);
+      if (dep === null) continue;
+      const c = colOf(el, comp);
+      atoms.push(q[0], q[1], q[2], ELEM[el].r, c[0], c[1], c[2], clamp(-dep / 0.7, 0, 1));
+      P[i] = { q, c, dep };
+    }
+    const bond = (pa, pb) => bonds.push(pa.q[0], pa.q[1], pa.q[2], 1, pb.q[0], pb.q[1], pb.q[2], pa.c[0], pa.c[1], pa.c[2], clamp(-Math.max(pa.dep, pb.dep) / 0.7, 0, 1), pb.c[0], pb.c[1], pb.c[2]);
+    for (const [i, j] of TB) if (P[i] && P[j]) bond(P[i], P[j]);
+    if (extra) extra(P, bond);
+  }
+  // ---- セルロース（ミクロフィブリル）
+  const aLo = Math.max(aF - Rn, -D.wm), aHi = Math.min(aF + Rn, D.wp);
+  // 照準にいちばん近い「表面に見えている鎖」を1本選んで色を変える（1本の分子が見えるように）
+  let focus = null;
+  const FOCUS_C = [0.16, 0.62, 0.38];
+  for (let pass = 0; pass < 2; pass++)
+  for (let L = 0; L < 6; L++) {
+    const sg = L < 3 ? 1 : -1, m = D.M[L], cm = Math.cos(m), sm = Math.sin(m);
+    const eDir = V.add(V.mul(D.b, cm), V.mul({ x: 0, y: 1, z: 0 }, -sg * sm));
+    const fDir = V.add(V.mul(D.b, sg * sm), V.mul({ x: 0, y: 1, z: 0 }, cm));
+    const eF = D.EA[L] + bF * cm - sg * cF * sm, fF = D.FA[L] + sg * bF * sm + cF * cm;
+    const r0 = Math.floor(aLo / DEEP.DA) - 1, r1 = Math.ceil(aHi / DEEP.DA) + 1;
+    for (let r = r0; r <= r1; r++) {
+      const stag = gmod(r, 2) * 0.5 * DEEP.DE;
+      const c0 = Math.floor((eF - Rn - stag) / DEEP.DE) - 1, c1 = Math.ceil((eF + Rn - stag) / DEEP.DE) + 1;
+      for (let cl = c0; cl <= c1; cl++) {
+        const fb = fibrilAt(r, cl, L); if (!fb) continue;
+        if (deepLayer(fb.a, D.wp, D.wm) !== L) continue;
+        for (let ci = 0; ci < CHAINS.length; ci++) {
+          const ch = CHAINS[ci];
+          const ca = fb.a + ch.a * fb.rad / DEEP.RF, ce = fb.e + ch.e * fb.rad / DEEP.RF;
+          const key = r + ':' + cl + ':' + L + ':' + ci;
+          if (pass === 0) {
+            // 照準の f に近いブドウ糖の中心が、表面の近くに出ているか
+            const i = Math.round((fF - ch.f) / DEEP.RES), f0 = i * DEEP.RES + ch.f;
+            const da = ca - D.aA, de = ce - D.EA[L], df = f0 - D.FA[L];
+            const cx = D.n.x * da + eDir.x * de + fDir.x * df, cy = D.n.y * da + eDir.y * de + fDir.y * df, cz = D.n.z * da + eDir.z * de + fDir.z * df;
+            const ins = inside(cx, cy, cz, ca);
+            if (ins < -0.25 || ins > 0.9) continue;
+            const d = Math.hypot(cx - Fo.x * 1, cy - Fo.y, cz - Fo.z);
+            if (!focus || d < focus.d) focus = { d, key, pos: { x: cx, y: cy, z: cz } };
+            continue;
+          }
+          const isFocus = focus && focus.key === key;
+          const i0 = Math.floor((fF - Rn - ch.f) / DEEP.RES), i1 = Math.ceil((fF + Rn - ch.f) / DEEP.RES);
+          for (let i = i0; i <= i1; i++) {
+            const f0 = i * DEEP.RES + ch.f;
+            const da = ca - D.aA, de = ce - D.EA[L], df = f0 - D.FA[L];
+            const cx = D.n.x * da + eDir.x * de + fDir.x * df, cy = D.n.y * da + eDir.y * de + fDir.y * df, cz = D.n.z * da + eDir.z * de + fDir.z * df;
+            const ins = inside(cx, cy, cz, ca);
+            if (ins < -1.0 || ins > 1.6) continue;
+            const flip = (i & 1) ? -1 : 1;
+            const xf = (x, y, z) => {
+              const lx = x * 0.1 * flip, ly = y * 0.1, lz = z * 0.1 * flip;
+              return [cx + eDir.x * lx + fDir.x * ly + D.n.x * lz, cy + eDir.y * lx + fDir.y * ly + D.n.y * lz, cz + eDir.z * lx + fDir.z * ly + D.n.z * lz, ca + lz];
+            };
+            const keep = (x, y, z, a) => {
+              if (Math.max(sdB(x, y, z) - 0.35, slabOf(a) - 0.3) > 0) return null;   // 切り口から少し繊維が飛び出している
+              const dep = inside(x, y, z, a);
+              return dep < -0.28 ? null : dep;                                    // 見えるのは表面の1層分
+            };
+            // となりのブドウ糖とのつなぎ（O4 → 次の C1）
+            const extra = (P, bond) => {
+              if (!P[10]) return;
+              const q = xf(0, 1.10 + 5.19, -0.25);   // 次は向きが逆になる
+              const dep = keep(q[0], q[1], q[2], q[3]);
+              if (dep === null) return;
+              bond(P[10], { q, c: isFocus ? FOCUS_C : COMP_C.cel, dep });
+            };
+            emit(GLC, GLC_B, xf, keep, isFocus ? 'focus' : 'cel', extra);
+          }
+        }
+      }
+    }
+  }
+  // ---- すき間を埋めるリグニンとヘミセルロース（0.62nm の格子にランダムに置く）
+  const G = 0.62;
+  const bRed = gmod(V.dot(A, D.b) * 1000, G * 4096), cRed = gmod(A.y * 1000, G * 4096);
+  const ia0 = Math.floor((aF - Rn) / G), ia1 = Math.ceil((aF + Rn) / G);
+  const ib0 = Math.floor((bRed + bF - Rn) / G), ib1 = Math.ceil((bRed + bF + Rn) / G);
+  const ic0 = Math.floor((cRed + cF - Rn) / G), ic1 = Math.ceil((cRed + cF + Rn) / G);
+  for (let ia = ia0; ia <= ia1; ia++) for (let ib = ib0; ib <= ib1; ib++) for (let ic = ic0; ic <= ic1; ic++) {
+    const id = hc(hc(hc(ia, ib), ic), 99);
+    const ga = (ia + hs(id, 1)) * G, gb = (ib + hs(id, 2)) * G - bRed, gc = (ic + hs(id, 3)) * G - cRed;
+    const da = ga - D.aA;
+    const cx = D.n.x * da + D.b.x * gb, cy = gc, cz = D.n.z * da + D.b.z * gb;
+    const ins = inside(cx, cy, cz, ga);
+    if (ins > 0.1 || ins < -0.7) continue;
+    const L = deepLayer(ga, D.wp, D.wm);
+    let comp = 'lig';
+    if (L >= 0) {
+      const sg = L < 3 ? 1 : -1, m = D.M[L];
+      const e = D.EA[L] + gb * Math.cos(m) - sg * gc * Math.sin(m);
+      const nf = nearestFibril(ga, e, L);
+      if (nf && nf.d < 0.4) continue;                  // 繊維の中には置かない
+      if (nf && nf.d < 1.1) comp = 'hem';
+    }
+    if (hs(id, 4) < 0.18) continue;
+    const rot = rotFromHash(id);
+    const T = comp === 'hem' ? GLC : LIG, TB = comp === 'hem' ? GLC_B : LIG_B;
+    const oy = comp === 'hem' ? 0.26 : 0.2;
+    const xf = (x, y, z) => {
+      const lx = x * 0.1, ly = y * 0.1 - oy, lz = z * 0.1;
+      const px = cx + rot[0] * lx + rot[1] * ly + rot[2] * lz, py = cy + rot[3] * lx + rot[4] * ly + rot[5] * lz, pz = cz + rot[6] * lx + rot[7] * ly + rot[8] * lz;
+      return [px, py, pz, ga + (px - cx) * D.n.x + (pz - cz) * D.n.z];
+    };
+    const keep = (x, y, z, a) => { const dep = inside(x, y, z, a); return (dep > 0.05 || dep < -0.45) ? null : dep; };
+    emit(T, TB, xf, keep, comp);
+  }
+  return { atoms: new Float32Array(atoms), bonds: new Float32Array(bonds), focus };
+}
+
+// =====================================================================
+// [S5] シェーダー（GLSL ES 3.0）
+// =====================================================================
+const GLSL_COMMON = `#version 300 es
+precision highp float;
+precision highp int;
+const float WF = ${WD.WF.toFixed(1)};
+const float RMID = ${WD.RMID.toFixed(1)};
+const float TAPER = ${WD.TAPER};
+const float WHITE = ${WD.WHITE.toFixed(1)};
+uint hu(uint x){ x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; return x; }
+uint hc(uint a, uint b){ return hu((a * 0x9E3779B1u) ^ hu(b + 0x632BE5ABu)); }
+float h2(int a, int b){ return float(hc(uint(a), uint(b)) >> 8) / 16777216.0; }
+float h3(int a, int b, int c){ return float(hc(hc(uint(a), uint(b)), uint(c)) >> 8) / 16777216.0; }
+float hs(uint a, int salt){ return float(hc(a, uint(salt)) >> 8) / 16777216.0; }
+float vnoise(vec2 x){
+  vec2 i = floor(x), f = x - i; vec2 u = f*f*(3.0 - 2.0*f);
+  int ix = int(i.x), iy = int(i.y);
+  return mix(mix(h2(ix,iy), h2(ix+1,iy), u.x), mix(h2(ix,iy+1), h2(ix+1,iy+1), u.x), u.y);
+}
+float sdRB2(vec2 p, vec2 b, float r){ vec2 q = abs(p) - b + r; return length(max(q,0.0)) + min(max(q.x,q.y),0.0) - r; }
+float sdRB3(vec3 p, vec3 b, float r){ vec3 q = abs(p) - b + r; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r; }
+`;
+
+const GLSL_WOOD = GLSL_COMMON + `
+uniform vec2 uRes; uniform vec2 uJit; uniform vec2 uCen; uniform float uField; uniform float uSeed;
+uniform vec3 uCamOff, uDir, uRight, uUp;
+uniform vec3 uPMax, uPMin; uniform float uRound;
+uniform float uSem;
+uniform vec2 uVA; uniform float uRA, uSAbs, uYAbs, uWaveA, uREffA, uHeartRel;
+uniform float uRelB[48];
+uniform float uSRed; uniform int uFB;
+uniform float uYRed; uniform int uYB; uniform float uY15;
+out vec4 outCol;
+
+struct Co { float rho; float Wn; int ring; float s; float y; float yg15; float rg; float rel; float sAbs; float yAbs; };
+struct CI { float sd; float phi; float kind; float depth; float w; float cs; };
+
+float wave(float s, float y){ return 320.0*(2.0*vnoise(vec2(s/9000.0, y/16000.0)) - 1.0) + 90.0*(2.0*vnoise(vec2(s/2600.0 + 17.0, y/5200.0)) - 1.0); }
+
+Co coords(vec3 p){
+  Co c;
+  vec2 d = p.xz, v = uVA;
+  float rv = length(v + d);
+  float dr = (2.0*dot(v, d) + dot(d, d)) / (rv + uRA);
+  float im = d.y*v.x - d.x*v.y;
+  float re = uRA*uRA + dot(v, d);
+  float ds = RMID*atan(im, re);
+  c.sAbs = uSAbs + ds; c.yAbs = uYAbs + p.y;
+  float rel = dr + TAPER*p.y + (wave(c.sAbs, c.yAbs) - uWaveA);
+  int lo = 0, hi = 47;
+  if (rel < uRelB[0]) { hi = 1; }
+  else if (rel >= uRelB[47]) { lo = 46; hi = 47; }
+  else { for (int it = 0; it < 7; it++) { if (hi - lo <= 1) break; int m = (lo + hi) / 2; if (uRelB[m] <= rel) lo = m; else hi = m; } }
+  c.ring = lo; c.rho = rel - uRelB[lo]; c.Wn = uRelB[lo+1] - uRelB[lo];
+  c.s = uSRed + ds; c.y = uYRed + p.y; c.yg15 = uY15 + p.y; c.rg = uREffA + rel; c.rel = rel;
+  return c;
+}
+
+float fileB(int j, float rg){ return 2.2*sin(rg*0.021 + 6.2831*h2(j,3)) + 1.3*sin(rg*0.0061 + 6.2831*h2(j,4)); }
+
+CI cellFn(Co co){
+  CI c;
+  float rho = co.rho, Wn = co.Wn, s = co.s, y = co.y, rg = co.rg, yg15 = co.yg15;
+  int ring = co.ring, FB = uFB, YB = uYB;
+  float phi = clamp(rho/Wn, 0.0, 1.0);
+  c.phi = phi;
+  float se = 38.0 + 8.0*h2(ring, 11), sl = 12.0 + 5.0*h2(ring, 12);
+  float A1 = Wn/se, A2 = (Wn/sl - Wn/se)/6.0;
+  float jf = floor(s/WF);
+  int jl = int(jf);
+  float b0 = jf*WF + fileB(FB + jl, rg), b1 = (jf + 1.0)*WF + fileB(FB + jl + 1, rg);
+  if (s < b0) { jl -= 1; b1 = b0; b0 = float(jl)*WF + fileB(FB + jl, rg); }
+  else if (s >= b1) { jl += 1; b0 = b1; b1 = float(jl + 1)*WF + fileB(FB + jl + 1, rg); }
+  int fid = FB + jl;
+  float sc = rg/RMID;
+  float rayW = 0.0, ry0 = 0.0, rH = 0.0;
+  float ySlot = floor(y/200.0);
+  int q = YB + int(ySlot);
+  if (h2(fid, 21) < 0.2 && h3(fid, q, 22) < 0.7) {
+    rH = (2.0 + floor(h3(fid, q, 23)*9.0))*18.0;
+    ry0 = ySlot*200.0 + 4.0 + h3(fid, q, 24)*(192.0 - rH);
+    rayW = 13.0*smoothstep(ry0 - 14.0, ry0 + 1.0, y)*(1.0 - smoothstep(ry0 + rH - 1.0, ry0 + rH + 14.0, y));
+  }
+  if (rayW > 0.5 && s < b0 + rayW) {
+    float rcl = 95.0, off = h3(fid, ring, 25)*rcl;
+    float kr = floor((rho + off)/rcl);
+    float r0 = max(kr*rcl - off, 0.0), r1 = min(kr*rcl - off + rcl, Wn);
+    bool inR = (y >= ry0 && y <= ry0 + rH);
+    vec3 qq = vec3(rho - 0.5*(r0 + r1), (s - (b0 + 0.5*rayW))*sc, mod(y - ry0, 18.0) - 9.0);
+    vec3 hb = max(vec3(0.5*(r1 - r0), 0.5*rayW*sc, 9.0) - 0.9, vec3(0.25));
+    float lum = sdRB3(qq, hb, min(1.2, min(hb.y, hb.z)*0.6));
+    if (!inR) lum = max(lum, 0.6);
+    c.sd = -lum; c.kind = 1.0; c.w = 0.9; c.cs = rcl;
+    c.depth = min(min(0.5*(r1 - r0) - abs(qq.x), 0.5*rayW*sc - abs(qq.y)), 9.0 - abs(qq.z));
+    return c;
+  }
+  float tb0 = b0 + rayW, ct = 0.5*(tb0 + b1), ht = 0.5*(b1 - tb0)*sc;
+  float o = h3(fid, ring, 5);
+  float p5 = pow(phi, 5.0);
+  float u = A1*phi + A2*p5*phi + o;
+  float k = floor(u), fu = u - k;
+  float cs = Wn/(A1 + 6.0*A2*p5);
+  float r0 = max(rho - fu*cs, 0.0), r1 = min(rho - fu*cs + cs, Wn);
+  float cr = 0.5*(r0 + r1), hr = 0.5*(r1 - r0);
+  uint cid = hc(hc(uint(fid), uint(ring)), uint(int(k)));
+  float xr = rho - cr, xt = (s - ct)*sc;
+  float hcell = hs(cid, 6);
+  bool resin = hs(cid, 9) < (0.006 + 0.03*smoothstep(0.75, 1.0, phi));
+  float w = mix(1.5, 5.4, smoothstep(0.64, 0.97, phi))*(0.88 + 0.24*hcell);
+  if (resin) w *= 0.55;
+  float lr = max(hr - w, 0.35), lt = max(ht - w, 0.35);
+  float yo = hs(cid, 7)*3000.0;
+  float ty = mod(yg15 - yo, 3000.0), e = min(ty, 3000.0 - ty), tf = smoothstep(0.0, 70.0, e);
+  lt = max(lt*mix(0.08, 1.0, tf), 0.3); lr = max(lr*mix(0.45, 1.0, tf), 0.3);
+  float ltp = lt, ltm = lt;
+  if (!resin) {
+    float sy = floor(y/25.0);
+    int qp = YB*8 + int(sy);
+    float pr = mix(0.6, 0.12, smoothstep(0.6, 0.95, phi));
+    float R = min(9.0, hr*0.6), ap = R*0.26, H = min(1.5, R*0.18);
+    for (int side = 0; side < 2; side++) {
+      uint pid = hc(hc(cid, uint(qp)), uint(side));
+      if (hs(pid, 8) < pr) {
+        float yc = sy*25.0 + 12.5 + (hs(pid, 10) - 0.5)*5.0;
+        float xc = (hs(pid, 11) - 0.5)*hr*0.3;
+        float rr = length(vec2(xr - xc, y - yc));
+        float dome = H*sqrt(max(0.0, 1.0 - rr*rr/(R*R)));
+        float hole = smoothstep(ap*1.9, ap*0.9, rr);
+        float vv = mix(lt - dome, ht - 0.15, hole);
+        if (side == 0) ltp = vv; else ltm = vv;
+      }
+    }
+  }
+  float ot = 0.5*(ltp - ltm), lt2 = 0.5*(ltp + ltm);
+  float rc = clamp(min(lr, lt2)*0.45, 0.2, 6.0);
+  float lum = sdRB2(vec2(xr, xt - ot), vec2(lr, lt2), rc);
+  float sd = -lum, kind = 0.0;
+  if (resin) {
+    float ys = mod(yg15 - hs(cid, 12)*140.0, 140.0) - 70.0;
+    float blob = sdRB3(vec3(xr, xt, ys), vec3(lr*0.82, lt*0.82, 60.0), min(lr, lt)*0.75);
+    if (blob < sd) { sd = blob; kind = 2.0; }
+  }
+  c.sd = sd; c.kind = kind; c.w = w; c.cs = cs;
+  c.depth = min(hr - abs(xr), ht - abs(xt));
+  return c;
+}
+
+float sdBlock(vec3 p){
+  vec3 q = p - uPMax + uRound;
+  float dN = length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - uRound;
+  float dF = max(max(uPMin.x - p.x, uPMin.y - p.y), uPMin.z - p.z);
+  return max(dN, dF);
+}
+float mapD(vec3 p){ Co co = coords(p); CI ci = cellFn(co); return max(sdBlock(p), ci.sd); }
+vec3 calcN(vec3 p, float h){
+  const vec2 k = vec2(1.0, -1.0);
+  return normalize(k.xyy*mapD(p + k.xyy*h) + k.yyx*mapD(p + k.yyx*h) + k.yxy*mapD(p + k.yxy*h) + k.xxx*mapD(p + k.xxx*h));
+}
+vec3 calcNBox(vec3 p, float h){
+  const vec2 k = vec2(1.0, -1.0);
+  return normalize(k.xyy*sdBlock(p + k.xyy*h) + k.yyx*sdBlock(p + k.yyx*h) + k.yxy*sdBlock(p + k.yxy*h) + k.xxx*sdBlock(p + k.xxx*h));
+}
+
+// 材の色：心材（淡紅色〜赤褐色）・白線帯・辺材（淡黄白色）。晩材は帯になって濃い
+float latewood(float phi){ return smoothstep(0.74, 0.90, phi); }
+vec3 woodColor(float rel, float phi, int ring){
+  float hrt = smoothstep(-400.0, 400.0, uHeartRel - rel);
+  float wz = smoothstep(-300.0, 300.0, uHeartRel + WHITE - rel)*(1.0 - hrt);
+  float lw = latewood(phi);
+  vec3 sapE = vec3(0.95, 0.88, 0.72), sapL = vec3(0.80, 0.63, 0.42);
+  vec3 hrtE = vec3(0.87, 0.61, 0.45), hrtL = vec3(0.63, 0.33, 0.21);
+  vec3 whE = vec3(0.97, 0.93, 0.82), whL = vec3(0.86, 0.74, 0.55);
+  vec3 e = mix(mix(sapE, hrtE, hrt), whE, wz*0.8);
+  vec3 l = mix(mix(sapL, hrtL, hrt), whL, wz*0.8);
+  vec3 c = mix(e, l, lw);
+  c *= 1.0 + 0.05*(phi - 0.4)*(1.0 - lw);           // 早材の終わりほどわずかに濃く
+  c *= 0.95 + 0.10*h2(ring, 41);                      // 年輪ごとの色むら
+  return c;
+}
+
+vec3 background(vec2 uv, float sem){
+  float g = 0.93 - 0.10*length(uv*vec2(1.0, 1.3));
+  return mix(vec3(g*0.98, g, g*1.02), vec3(0.0), sem);
+}
+
+// 照明：左上手前からの主光源＋右からの補助光＋空の環境光（写真スタジオ風）
+vec3 lightCol(vec3 base, vec3 n, vec3 rd, float ao, float gloss){
+  vec3 L1 = normalize(-uRight*0.55 + uUp*0.85 - uDir*0.55);
+  vec3 L2 = normalize(uRight*0.9 + uUp*0.25 - uDir*0.45);
+  float d1 = max(dot(n, L1), 0.0), d2 = max(dot(n, L2), 0.0);
+  float sky = 0.5 + 0.5*n.y;
+  vec3 H = normalize(L1 - rd);
+  float sp = pow(max(dot(n, H), 0.0), mix(18.0, 60.0, gloss))*mix(0.03, 0.13, gloss);
+  vec3 c = base*(vec3(1.0, 0.97, 0.92)*0.78*d1 + vec3(0.88, 0.93, 1.0)*0.30*d2 + (0.30 + 0.16*sky))*ao;
+  return c + sp*ao;
+}
+float semShade(vec3 n, vec3 rd, float ao, float lum){
+  float ndv = clamp(dot(n, -rd), 0.0, 1.0);
+  float tilt = pow(1.0 - ndv, 1.4);
+  vec3 det = normalize(-uRight*0.6 + uUp*0.5 - uDir*0.3);
+  float g = (0.40 + 0.52*tilt + 0.18*max(dot(n, det), 0.0))*(0.78 + 0.30*lum);
+  return g*sqrt(ao);
+}
+
+void main(){
+  vec2 frag = gl_FragCoord.xy + uJit;
+  vec2 uv = (frag - uCen)/uRes.x;
+  float px = uField/uRes.x;
+  vec3 ro = uCamOff + uRight*(uv.x*uField) + uUp*(uv.y*uField);
+  vec3 rd = uDir;
+  vec3 inv = 1.0/rd;
+  vec3 t0 = (uPMin - ro)*inv, t1 = (uPMax - ro)*inv;
+  vec3 tmn = min(t0, t1), tmx = max(t0, t1);
+  float tn = max(max(tmn.x, tmn.y), tmn.z), tf = min(min(tmx.x, tmx.y), tmx.z);
+  vec3 bg = background(uv, uSem);
+  if (tn > tf) { outCol = vec4(bg, 1.0); return; }
+  float t = tn - uRound*1.6;
+  bool hitB = false;
+  for (int i = 0; i < 24; i++) {
+    float d = sdBlock(ro + rd*t);
+    if (d < px*0.3) { hitB = true; break; }
+    t += d;
+    if (t > tf + 1.0) break;
+  }
+  if (!hitB) { outCol = vec4(bg, 1.0); return; }
+  float tEnter = t;
+  vec3 hb = ro + rd*t;
+  vec3 nb = calcNBox(hb, max(px*0.5, 0.002));
+  float cellPx = 22.0/px;
+  float wMicro = smoothstep(4.5, 9.0, cellPx);
+
+  // ---- 遠景・中景：面の色と模様（細胞が数ピクセル以下のとき）
+  vec3 macro = vec3(0.0);
+  if (wMicro < 1.0) {
+    Co co = coords(hb);
+    CI ci = cellFn(co);
+    float phi = clamp(co.rho/co.Wn, 0.0, 1.0);
+    vec3 base = woodColor(co.rel, phi, co.ring);
+    float isTop = smoothstep(0.6, 0.9, nb.y);
+    float side = 1.0 - isTop;
+    // 縦の面：繊維に沿った細い筋。木口：ざらつき
+    float hcoord = co.rg + co.sAbs*(1.0 - abs(nb.x));
+    float st1 = vnoise(vec2(hcoord*0.045, co.yAbs*0.0007));
+    float st2 = vnoise(vec2(hcoord*0.20, co.yAbs*0.0021 + 7.0));
+    float st3 = vnoise(vec2(hcoord*0.9, co.yAbs*0.008 + 3.0));
+    float fadeTex = 1.0 - smoothstep(1.0, 3.0, cellPx);
+    float grain = (st1 - 0.5)*0.10 + (st2 - 0.5)*0.08 + (st3 - 0.5)*0.06;
+    float endg = vnoise(vec2(co.rg*0.35, co.sAbs*0.35))*0.5 + vnoise(vec2(co.rg*1.3, co.sAbs*1.3))*0.5;
+    base *= 1.0 + (side*grain + isTop*(endg - 0.5)*0.10)*fadeTex;
+    base *= mix(1.0, 0.86, isTop);                    // 木口は光を吸って少し濃い
+    float cov = smoothstep(-0.7*px, 0.7*px, ci.sd);
+    float fadeIn = smoothstep(1.2, 3.2, cellPx);
+    if (ci.kind > 1.5) cov = 1.0;                      // 樹脂細胞の中身は濃い色
+    base = mix(base, base*0.45, cov*fadeIn);
+    vec3 cc = lightCol(base, nb, rd, 1.0, side*(1.0 - fadeIn)*0.8);
+    float lum = dot(base, vec3(0.3, 0.55, 0.15));
+    float sg = semShade(nb, rd, 1.0, lum)*(1.0 - 0.5*cov*fadeIn);
+    macro = mix(cc, vec3(sg), uSem);
+  }
+
+  // ---- 近景：細胞をレイマーチングで立体に
+  vec3 micro = vec3(0.0);
+  if (wMicro > 0.0) {
+    float eps = 0.3*px;
+    Co co; CI ci;
+    t = tEnter;
+    vec3 p = hb;
+    for (int i = 0; i < 120; i++) {
+      p = ro + rd*t;
+      co = coords(p);
+      ci = cellFn(co);
+      float d = max(sdBlock(p), ci.sd);
+      if (d < eps) break;
+      t += max(d*0.72, eps*0.6);
+      if (t > tf) break;
+    }
+    float hn = max(px*0.6, 0.002);
+    vec3 n = calcN(p, hn);
+    float cut = 1.0 - smoothstep(eps*1.0, eps*4.0, abs(sdBlock(p)));
+    float depthIn = (t - tEnter);
+    float aoCh = mix(0.45, 1.0, exp(-depthIn/28.0));
+    float ao = 0.0, sc = 1.0;
+    for (int j = 1; j <= 3; j++) {
+      float hh = float(j)*float(j)*0.6*clamp(ci.w, 1.0, 4.0);
+      ao += (hh - mapD(p + n*hh))*sc; sc *= 0.55;
+    }
+    ao = clamp(1.0 - 0.18*ao, 0.3, 1.0);
+    float phi = ci.phi;
+    vec3 base = woodColor(co.rel, phi, co.ring);
+    base = mix(base, vec3(0.95, 0.91, 0.84), 0.35);  // 細胞壁は半透明で白っぽく見える
+    if (ci.kind > 0.5 && ci.kind < 1.5) base *= vec3(0.97, 0.92, 0.85);
+    float isCont = step(1.5, ci.kind);
+    if (isCont > 0.5) {
+      float hrt = smoothstep(-400.0, 400.0, uHeartRel - co.rel);
+      base = mix(vec3(0.55, 0.36, 0.20), vec3(0.30, 0.11, 0.06), hrt);
+    }
+    // 細胞壁の層（切り口に出る）：細胞間層・S1・S2・S3
+    float dep = ci.depth;
+    float aa = max(px*1.2, 0.01);
+    float ml = 1.0 - smoothstep(0.12 - aa, 0.12 + aa, dep);
+    float s1 = smoothstep(0.20 - aa, 0.20 + aa, dep)*(1.0 - smoothstep(0.45 - aa, 0.45 + aa, dep));
+    float s3 = smoothstep(ci.w - 0.12 - aa, ci.w - 0.12 + aa, dep);
+    float layVis = smoothstep(0.25, 0.04, px)*cut*(1.0 - step(0.5, ci.kind));
+    base *= 1.0 - layVis*(0.22*ml - 0.10*s1 - 0.08*s3);
+    float lam = 0.5 + 0.5*sin(dep*2.0*3.14159/0.06);
+    base *= 1.0 - smoothstep(0.03, 0.006, px)*cut*0.06*lam*(1.0 - ml);
+    float edge = exp(-max(-ci.sd, 0.0)/(1.2*px + 0.04))*cut;
+    vec3 cc = lightCol(base, n, rd, ao*aoCh, 0.25) + edge*0.04;
+    float lum = dot(base, vec3(0.3, 0.55, 0.15));
+    float sg = semShade(n, rd, ao*aoCh, lum) + edge*0.30;
+    sg *= 1.0 - 0.15*isCont;
+    sg *= 1.0 - layVis*0.10*ml;
+    micro = mix(cc, vec3(sg), uSem);
+  }
+  vec3 col = mix(macro, micro, wMicro);
+  float nz = hs(uint(gl_FragCoord.x)*1973u + uint(gl_FragCoord.y)*9277u + uint(uSeed*65535.0), 77) - 0.5;
+  col += nz*0.05*uSem;
+  outCol = vec4(clamp(col, 0.0, 1.2), 1.0);
+}
+`;
+
+// 細胞壁の中（nm）：壁を平面とみなし、ミクロフィブリル（円柱の格子）とリグニン（すき間）を描く
+const GLSL_DEEP = GLSL_COMMON + `
+uniform vec2 uRes, uJit, uCen; uniform float uField, uSeed, uSem;
+uniform vec3 uCamOff, uDir, uRight, uUp;
+uniform vec3 uPMax, uPMin; uniform float uRound;
+uniform vec3 uN, uB;
+uniform float uAA, uWp, uWm, uHeart;
+uniform float uM[6], uEA[6], uFA[6];
+out vec4 outCol;
+const float DA = ${DEEP.DA}, DE = ${DEEP.DE}, RF = ${DEEP.RF};
+
+float sdBlock(vec3 p){
+  vec3 q = p - uPMax + uRound;
+  float dN = length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - uRound;
+  float dF = max(max(uPMin.x - p.x, uPMin.y - p.y), uPMin.z - p.z);
+  return max(dN, dF);
+}
+int layerIdx(float a){
+  float d = abs(a), w = a >= 0.0 ? uWp : uWm; int base = a >= 0.0 ? 0 : 3;
+  if (d < 100.0) return -1; if (d < 180.0) return -2; if (d < 430.0) return base; if (d < w - 100.0) return base + 1; return base + 2;
+}
+float n3(vec3 x){
+  vec3 i = floor(x), f = x - i; f = f*f*(3.0 - 2.0*f);
+  ivec3 k = ivec3(i);
+  float a = h3(k.x, k.y, k.z), b = h3(k.x+1, k.y, k.z), c = h3(k.x, k.y+1, k.z), d = h3(k.x+1, k.y+1, k.z);
+  float e = h3(k.x, k.y, k.z+1), g = h3(k.x+1, k.y, k.z+1), h = h3(k.x, k.y+1, k.z+1), j = h3(k.x+1, k.y+1, k.z+1);
+  return mix(mix(mix(a,b,f.x), mix(c,d,f.x), f.y), mix(mix(e,g,f.x), mix(h,j,f.x), f.y), f.z);
+}
+// 一番近い繊維：x=距離, y=繊維のまわりの角度, z=繊維方向の座標, w=繊維ごとの乱数
+vec4 fibril(vec3 p, float a, int L){
+  float m = uM[L], sg = L < 3 ? 1.0 : -1.0;
+  float cm = cos(m), sm = sin(m);
+  float bb = dot(p, uB), cc = p.y;
+  float e = uEA[L] + bb*cm - sg*cc*sm;
+  float fc = uFA[L] + sg*bb*sm + cc*cm;
+  float r0 = floor(a/DA - 0.5);
+  vec4 best = vec4(1e9, 0.0, fc, 0.0);
+  for (int dr = 0; dr < 2; dr++) {
+    float r = r0 + float(dr);
+    float stag = mod(r, 2.0)*0.5*DE;
+    float c0 = floor((e - stag)/DE - 0.5);
+    for (int dc = 0; dc < 2; dc++) {
+      float cl = c0 + float(dc);
+      uint id = hc(hc(uint(int(r)), uint(int(cl))), uint(L + 7));
+      if (hs(id, 1) < 0.07) continue;
+      vec2 cen = vec2((r + 0.5)*DA + (hs(id, 2) - 0.5)*0.9, (cl + 0.5)*DE + stag + (hs(id, 3) - 0.5)*0.9);
+      float rad = RF*(0.9 + 0.2*hs(id, 4));
+      vec2 q = vec2(a, e) - cen;
+      float d = length(q) - rad;
+      if (d < best.x) best = vec4(d, atan(q.y, q.x), fc, hs(id, 5));
+    }
+  }
+  return best;
+}
+float mapD(vec3 p, out float mat, out vec4 fi, out float aOut){
+  float a = uAA + dot(p, uN);
+  aOut = a;
+  float sb = sdBlock(p);
+  float slab = max(a - uWp, -uWm - a);
+  float mtx = max(sb, slab);
+  mtx += (n3(p*0.55) - 0.5)*0.55 + (n3(p*1.7 + 9.0) - 0.5)*0.2;   // リグニンのざらつき
+  mat = 0.0; fi = vec4(1e9);
+  int L = layerIdx(a);
+  if (L >= 0) {
+    fi = fibril(p, a, L);
+    float fs = max(fi.x, max(sb - 0.9, slab - 0.45));
+    if (fs < mtx) { mat = 1.0; return fs; }
+  }
+  return mtx;
+}
+float mapS(vec3 p){ float m, a; vec4 f; return mapD(p, m, f, a); }
+vec3 calcN(vec3 p, float h){
+  const vec2 k = vec2(1.0, -1.0);
+  return normalize(k.xyy*mapS(p + k.xyy*h) + k.yyx*mapS(p + k.yyx*h) + k.yxy*mapS(p + k.yxy*h) + k.xxx*mapS(p + k.xxx*h));
+}
+void main(){
+  vec2 frag = gl_FragCoord.xy + uJit;
+  vec2 uv = (frag - uCen)/uRes.x;
+  float px = uField/uRes.x;
+  vec3 ro = uCamOff + uRight*(uv.x*uField) + uUp*(uv.y*uField);
+  vec3 rd = uDir;
+  float g0 = 0.93 - 0.10*length(uv*vec2(1.0, 1.3));
+  vec3 bg = mix(vec3(g0*0.98, g0, g0*1.02), vec3(0.0), uSem);
+  vec3 inv = 1.0/rd;
+  vec3 t0 = (uPMin - ro)*inv, t1 = (uPMax + 1.5 - ro)*inv;
+  vec3 tmn = min(t0, t1), tmx = max(t0, t1);
+  float tn = max(max(tmn.x, tmn.y), tmn.z), tf = min(min(tmx.x, tmx.y), tmx.z);
+  if (tn > tf) { outCol = vec4(bg, 1.0); return; }
+  float t = tn;
+  float eps = max(0.3*px, 0.002);
+  float mat = 0.0, a = 0.0; vec4 fi;
+  bool hit = false;
+  vec3 p = ro + rd*t;
+  for (int i = 0; i < 90; i++) {
+    p = ro + rd*t;
+    float d = mapD(p, mat, fi, a);
+    if (d < eps) { hit = true; break; }
+    t += max(d*0.7, eps*0.5);
+    if (t > tf) break;
+  }
+  if (!hit) { outCol = vec4(bg, 1.0); return; }
+  vec3 n = calcN(p, max(px*0.6, 0.004));
+  float ao = 0.0, sc = 1.0;
+  for (int j = 1; j <= 3; j++) {
+    float hh = float(j)*float(j)*0.45;
+    ao += (hh - mapS(p + n*hh))*sc; sc *= 0.55;
+  }
+  ao = clamp(1.0 - 0.35*ao, 0.25, 1.0);
+  int L = layerIdx(a);
+  // 色：セルロース＝白っぽい、ヘミセルロース＝淡い黄、リグニン＝こはく色（細胞間層ほど濃い）
+  vec3 cel = vec3(0.95, 0.94, 0.88);
+  vec3 lig = mix(vec3(0.78, 0.62, 0.42), vec3(0.62, 0.44, 0.27), step(float(L), -0.5));
+  vec3 base = lig;
+  if (mat > 0.5) {
+    base = cel;
+    float chains = 0.5 + 0.5*cos(fi.y*9.0);
+    float res = 0.5 + 0.5*cos(fi.z*6.2832/${DEEP.RES});
+    float near = smoothstep(150.0, 30.0, uField);
+    base *= 1.0 - near*(0.10*chains + 0.05*res);
+  } else if (L >= 0 && fi.x < 0.8) {
+    base = mix(vec3(0.90, 0.86, 0.66), lig, smoothstep(0.0, 0.8, fi.x));   // 繊維を包むヘミセルロース
+  }
+  vec3 L1 = normalize(-uRight*0.55 + uUp*0.85 - uDir*0.55);
+  vec3 L2 = normalize(uRight*0.9 + uUp*0.25 - uDir*0.45);
+  float d1 = max(dot(n, L1), 0.0), d2 = max(dot(n, L2), 0.0);
+  vec3 H = normalize(L1 - rd);
+  float sp = pow(max(dot(n, H), 0.0), 30.0)*0.10;
+  vec3 cc = base*(0.80*d1 + 0.28*d2 + 0.34 + 0.12*n.y)*ao + sp*ao;
+  float ndv = clamp(dot(n, -rd), 0.0, 1.0);
+  vec3 det = normalize(-uRight*0.6 + uUp*0.5 - uDir*0.3);
+  float lum = dot(base, vec3(0.3, 0.55, 0.15));
+  float sg = (0.36 + 0.55*pow(1.0 - ndv, 1.4) + 0.18*max(dot(n, det), 0.0))*(0.70 + 0.40*lum)*sqrt(ao);
+  vec3 col = mix(cc, vec3(sg), uSem);
+  float nz = hs(uint(gl_FragCoord.x)*1973u + uint(gl_FragCoord.y)*9277u + uint(uSeed*65535.0), 77) - 0.5;
+  col += nz*0.05*uSem;
+  outCol = vec4(clamp(col, 0.0, 1.2), 1.0);
+}
+`;
+// 原子：四角形を球に見せる（インスタンス描画）。z は視線方向の深さ
+const GLSL_ATOM_VS = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 aCorner;
+layout(location=1) in vec4 aPosR;
+layout(location=2) in vec4 aCol;
+uniform vec3 uCamOff, uDir, uRight, uUp; uniform float uField, uRadScale; uniform vec2 uRes, uCen, uJit;
+out vec2 vUV; out vec4 vCol; out float vDepth; out float vR;
+void main(){
+  vec3 p = aPosR.xyz - uCamOff;
+  float sx = dot(p, uRight), sy = dot(p, uUp), sz = dot(p, uDir);
+  float r = aPosR.w*uRadScale;
+  vec2 pix = vec2(sx, sy)/uField*uRes.x + uCen - uJit;
+  vec2 corner = aCorner*r/uField*uRes.x;
+  vec2 ndc = (pix + corner)/uRes*2.0 - 1.0;
+  vDepth = sz; vR = r; vUV = aCorner; vCol = aCol;
+  gl_Position = vec4(ndc, clamp(sz/(uField*3.0), -0.99, 0.99), 1.0);
+}`;
+const GLSL_ATOM_FS = `#version 300 es
+precision highp float;
+in vec2 vUV; in vec4 vCol; in float vDepth; in float vR;
+uniform float uField; uniform float uGray;
+out vec4 o;
+void main(){
+  float r2 = dot(vUV, vUV); if (r2 > 1.0) discard;
+  float nz = sqrt(1.0 - r2);
+  vec3 n = vec3(vUV, nz);
+  gl_FragDepth = clamp((vDepth - nz*vR)/(uField*3.0), -0.99, 0.99)*0.5 + 0.5;
+  vec3 L = normalize(vec3(-0.45, 0.65, 0.62));
+  float dif = max(dot(n, L), 0.0);
+  float sp = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 36.0);
+  vec3 c = vCol.rgb*(0.30 + 0.80*dif) + 0.22*sp;
+  c *= mix(1.0, 0.40, vCol.a);
+  c *= 0.70 + 0.30*nz;
+  float g = dot(c, vec3(0.3, 0.55, 0.15));
+  o = vec4(mix(c, vec3(g), uGray), 1.0);
+}`;
+// 結合：線分を囲む四角形を描き、画素ごとに円柱との交点を解く（正射影なので2次方程式で済む）
+const GLSL_BOND_VS = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 aCorner;
+layout(location=1) in vec4 aAR;
+layout(location=2) in vec3 aB;
+layout(location=3) in vec4 aColA;
+layout(location=4) in vec3 aColB;
+uniform vec3 uCamOff, uDir, uRight, uUp; uniform float uField, uBondR; uniform vec2 uRes, uCen, uJit;
+out vec3 vA; out vec3 vB; out vec2 vP; out vec4 vColA; out vec3 vColB; out float vR;
+vec3 toV(vec3 p){ p -= uCamOff; return vec3(dot(p, uRight), dot(p, uUp), dot(p, uDir)); }
+void main(){
+  vec3 a = toV(aAR.xyz), b = toV(aB);
+  float R = uBondR*aAR.w;
+  vec2 d = b.xy - a.xy; float L = length(d);
+  vec2 t = L > 1e-6 ? d/L : vec2(1.0, 0.0), nr = vec2(-t.y, t.x);
+  vec2 pos = (aCorner.x < 0.0 ? a.xy - t*R : b.xy + t*R) + nr*aCorner.y*R;
+  vA = a; vB = b; vP = pos; vColA = aColA; vColB = aColB; vR = R;
+  vec2 pix = pos/uField*uRes.x + uCen - uJit;
+  gl_Position = vec4(pix/uRes*2.0 - 1.0, clamp((min(a.z, b.z) - R)/(uField*3.0), -0.99, 0.99), 1.0);
+}`;
+const GLSL_BOND_FS = `#version 300 es
+precision highp float;
+in vec3 vA; in vec3 vB; in vec2 vP; in vec4 vColA; in vec3 vColB; in float vR;
+uniform float uField, uGray;
+out vec4 o;
+void main(){
+  vec3 ab = vB - vA; float Lf = length(ab); vec3 u = ab/Lf;
+  float cx = vP.x - vA.x, cy = vP.y - vA.y;
+  float m = cx*u.x + cy*u.y;
+  float qa = 1.0 - u.z*u.z, qb = -2.0*m*u.z, qc = cx*cx + cy*cy - m*m - vR*vR;
+  if (qa < 1e-4) discard;
+  float disc = qb*qb - 4.0*qa*qc; if (disc < 0.0) discard;
+  float k = (-qb - sqrt(disc))/(2.0*qa);
+  float sAx = m + k*u.z;
+  if (sAx < 0.0 || sAx > Lf) discard;
+  vec3 w = vec3(cx, cy, k);
+  vec3 n = (w - sAx*u)/vR;
+  n = vec3(n.x, n.y, -n.z);
+  gl_FragDepth = clamp((vA.z + k)/(uField*3.0), -0.99, 0.99)*0.5 + 0.5;
+  vec3 col = sAx < 0.5*Lf ? vColA.rgb : vColB;
+  vec3 L = normalize(vec3(-0.45, 0.65, 0.62));
+  float dif = max(dot(n, L), 0.0);
+  float sp = pow(max(dot(reflect(-L, n), vec3(0.0, 0.0, 1.0)), 0.0), 30.0);
+  vec3 c = col*(0.30 + 0.80*dif) + 0.18*sp;
+  c *= mix(1.0, 0.40, vColA.a);
+  float g = dot(c, vec3(0.3, 0.55, 0.15));
+  o = vec4(mix(c, vec3(g), uGray), 1.0);
+}`;
+const GLSL_COMP = `#version 300 es
+precision highp float;
+uniform sampler2D uT1, uT2; uniform float uW; uniform vec2 uRes;
+out vec4 o;
+void main(){ vec2 uv = gl_FragCoord.xy/uRes; o = mix(texture(uT1, uv), texture(uT2, uv), uW); }`;
+
+const GLSL_VS = `#version 300 es
+in vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+const GLSL_SHOW = `#version 300 es
+precision highp float;
+uniform sampler2D uTex; uniform vec2 uRes; uniform float uSem;
+out vec4 o;
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec3 c = texture(uTex, uv).rgb;
+  vec2 q = uv - 0.5;
+  c *= 1.0 - (0.10 + 0.20*uSem)*dot(q, q)*2.0;
+  o = vec4(pow(clamp(c, 0.0, 1.0), vec3(0.95)), 1.0);
+}`;
+
+// =====================================================================
+// [S6] WebGL の準備
+// =====================================================================
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: false });
+const G = { ok: false };
+function fatal(html){ const f = document.getElementById('fatal'); document.getElementById('fatalBox').innerHTML = html; f.style.display = 'flex'; }
+function compile(type, src){
+  const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(sh);
+    console.error('シェーダーのコンパイルに失敗:', log);
+    throw new Error(log);
+  }
+  return sh;
+}
+function program(fsSrc, vsSrc){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vsSrc || GLSL_VS));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fsSrc));
+  gl.bindAttribLocation(p, 0, 'aPos');
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { const l = gl.getProgramInfoLog(p); console.error('リンク失敗:', l); throw new Error(l); }
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const info = gl.getActiveUniform(p, i); const name = info.name.replace(/\[0\]$/, ''); u[name] = gl.getUniformLocation(p, info.name); }
+  return { p, u };
+}
+function initGL(){
+  if (!gl) { fatal('<b>この端末では 3D 表示（WebGL2）が使えません。</b><br>Chrome を最新にするか、別の端末で開いてください。'); return; }
+  try {
+    G.wood = program(GLSL_WOOD);
+    G.deep = program(GLSL_DEEP);
+    G.show = program(GLSL_SHOW);
+    G.comp = program(GLSL_COMP);
+    G.atom = program(GLSL_ATOM_FS, GLSL_ATOM_VS);
+    G.bond = program(GLSL_BOND_FS, GLSL_BOND_VS);
+  } catch (e) {
+    fatal('<b>描画の準備に失敗しました。</b><br>左下の「ログ」を開いて、全文をコピーして送ってください。'); console.error(e); return;
+  }
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  G.vao = gl.createVertexArray(); gl.bindVertexArray(G.vao);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  // 原子のインスタンス描画
+  G.atomVao = gl.createVertexArray(); gl.bindVertexArray(G.atomVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  G.atomBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, G.atomBuf);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 32, 0); gl.vertexAttribDivisor(1, 1);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, 32, 16); gl.vertexAttribDivisor(2, 1);
+  G.bondVao = gl.createVertexArray(); gl.bindVertexArray(G.bondVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  G.bondBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, G.bondBuf);
+  [[1, 4, 0], [2, 3, 16], [3, 4, 28], [4, 3, 44]].forEach(([loc, n, off]) => { gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, n, gl.FLOAT, false, 56, off); gl.vertexAttribDivisor(loc, 1); });
+  gl.bindVertexArray(null);
+  G.atomCount = 0; G.bondCount = 0;
+  G.float = !!gl.getExtension('EXT_color_buffer_float');
+  G.ok = true;
+  console.info('WebGL2 OK / float target:', G.float, '/', gl.getParameter(gl.VERSION));
+}
+function makeTarget(w, h, depth){
+  const T = { w, h };
+  T.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, T.tex);
+  if (G.float) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  T.fbo = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, T.tex, 0);
+  if (depth) {
+    T.rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, T.rb);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, T.rb);
+  }
+  T.ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+  return T;
+}
+function freeTarget(T){ if (!T) return; gl.deleteTexture(T.tex); gl.deleteFramebuffer(T.fbo); if (T.rb) gl.deleteRenderbuffer(T.rb); }
+function ensureTargets(w, h){
+  if (G.tw === w && G.th === h) return;
+  [G.acc, G.t1, G.t2].forEach(freeTarget);
+  G.acc = makeTarget(w, h, false); G.t1 = makeTarget(w, h, true); G.t2 = makeTarget(w, h, true);
+  if (!(G.acc.ok && G.t1.ok && G.t2.ok) && G.float) { console.warn('半精度の描画先が使えないので 8bit にします'); G.float = false; G.tw = 0; return ensureTargets(w, h); }
+  G.tw = w; G.th = h;
+}
+
+// =====================================================================
+// [S7] カメラと操作
+// =====================================================================
+// 見える範囲（左のはしごと右の説明にはさまれた所）のまん中を、照準の位置にする
+const VC = { ox: 0, oy: 0 };
+function updateViewCenter(){
+  const w = innerWidth, h = innerHeight;
+  const lad = document.querySelector('.ladder').getBoundingClientRect();
+  const side = document.querySelector('.side').getBoundingClientRect();
+  const top = document.querySelector('.topbar').getBoundingClientRect();
+  const bot = document.querySelector('.bottom').getBoundingClientRect();
+  let x0 = lad.right, x1 = side.left, y0 = top.bottom, y1 = Math.min(h, bot.top + 30);
+  if (side.top > h * 0.4) { x1 = w; y1 = Math.min(y1, side.top); }   // 幅が狭い画面は説明が下に来る
+  VC.ox = (x0 + x1) / 2 - w / 2; VC.oy = (y0 + y1) / 2 - h / 2;
+  const c = document.getElementById('cross');
+  c.style.left = (w / 2 + VC.ox) + 'px'; c.style.top = (h / 2 + VC.oy) + 'px';
+}
+// 白黒（電子顕微鏡）の度合い。おまかせのときは倍率で切り替える
+function semWeight(){
+  if (S.mode === 1) return 0;
+  if (S.mode === 2) return 1;
+  return smooth(1100, 500, S.field);
+}
+function camBasis(){
+  const az = S.az * Math.PI / 180, el = S.el * Math.PI / 180;
+  const dir = { x: -Math.cos(el) * Math.cos(az), y: -Math.sin(el), z: -Math.cos(el) * Math.sin(az) };
+  const right = V.norm(V.cross(dir, { x: 0, y: 1, z: 0 }));
+  const up = V.cross(right, dir);
+  return { dir, right, up };
+}
+function cssSize(){ return { w: canvas.clientWidth, h: canvas.clientHeight }; }
+function reanchor(){
+  const { dir } = camBasis();
+  const hit = Wood.raycast(S.F, dir, S.field);
+  if (hit) { S.F = hit.p; S.A = hit.p; } else { S.A = { ...S.F }; }
+}
+function markDirty(){ S.dirty = true; S.lastMove = performance.now(); }
+function zoomAt(sx, sy, k){
+  const { right, up } = camBasis();
+  const { w } = cssSize();
+  const f0 = S.field, f1 = clamp(f0 * k, FIELD_MIN, FIELD_MAX);
+  const kk = f0 / w;
+  const Q = V.add(S.F, V.add(V.mul(right, sx * kk), V.mul(up, -sy * kk)));
+  S.F = V.add(Q, V.mul(V.sub(S.F, Q), f1 / f0));
+  S.field = f1;
+  reanchor(); markDirty(); stopTour();
+}
+function pan(dx, dy){
+  const { right, up } = camBasis();
+  const kk = S.field / cssSize().w;
+  S.F = V.add(S.F, V.add(V.mul(right, -dx * kk), V.mul(up, dy * kk)));
+  reanchor(); markDirty(); stopTour();
+}
+function orbit(dx, dy){
+  S.az = clamp(S.az - dx * 0.25, 4, 86);
+  S.el = clamp(S.el + dy * 0.25, 4, 86);
+  reanchor(); markDirty(); stopTour();
+}
+(function bindInput(){
+  const ptrs = new Map(); let last = null, mode = null, pinch = null;
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+  canvas.addEventListener('pointerdown', e => {
+    canvas.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 1) { last = { x: e.clientX, y: e.clientY }; mode = (e.button === 2 || e.shiftKey || S.rotMode) ? 'orbit' : 'pan'; }
+    if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; mode = 'pinch'; }
+    canvas.classList.add('dragging');
+    hideHint();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (mode === 'pinch' && ptrs.size >= 2) {
+      const [a, b] = [...ptrs.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      const r = canvas.getBoundingClientRect();
+      pan(cx - pinch.cx, cy - pinch.cy);
+      zoomAt(cx - r.left - r.width / 2 - VC.ox, cy - r.top - r.height / 2 - VC.oy, pinch.d / Math.max(d, 1));
+      pinch = { d, cx, cy };
+      return;
+    }
+    if (!last) return;
+    const dx = e.clientX - last.x, dy = e.clientY - last.y; last = { x: e.clientX, y: e.clientY };
+    if (mode === 'orbit') orbit(dx, dy); else if (mode === 'pan') pan(dx, dy);
+  });
+  const end = e => { ptrs.delete(e.pointerId); if (ptrs.size === 0) { last = null; mode = null; canvas.classList.remove('dragging'); } else if (ptrs.size === 1) { const [a] = [...ptrs.values()]; last = { ...a }; mode = 'pan'; } };
+  canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault(); hideHint();
+    const r = canvas.getBoundingClientRect();
+    const unit = e.deltaMode === 1 ? 33 : 1;
+    const k = Math.exp(e.deltaY * unit * (e.ctrlKey ? 0.012 : 0.0016));
+    zoomAt(e.clientX - r.left - r.width / 2 - VC.ox, e.clientY - r.top - r.height / 2 - VC.oy, k);
+  }, { passive: false });
+  window.addEventListener('keydown', e => {
+    if (e.key === '+' || e.key === ';') zoomAt(0, 0, 0.8);
+    else if (e.key === '-') zoomAt(0, 0, 1.25);
+    else if (e.key === 'ArrowLeft') pan(60, 0); else if (e.key === 'ArrowRight') pan(-60, 0);
+    else if (e.key === 'ArrowUp') pan(0, 60); else if (e.key === 'ArrowDown') pan(0, -60);
+  });
+})();
+
+// 飛んでいく動き（いったん引いてから寄る）
+function flyTo(target, dur){
+  const from = { F: { ...S.F }, lf: Math.log(S.field), az: S.az, el: S.el };
+  const to = { F: target.F, lf: Math.log(target.field), az: target.az ?? S.az, el: target.el ?? S.el };
+  const dist = V.len(V.sub(to.F, from.F));
+  const peak = Math.log(Math.max(dist * 1.6, 1e-6));
+  const bump = Math.max(0, peak - Math.max(from.lf, to.lf));
+  S.tween = { from, to, bump, t0: performance.now(), dur: dur || (900 + 260 * Math.abs(to.lf - from.lf) + (bump > 0 ? 500 : 0)) };
+}
+function stepTween(now){
+  const tw = S.tween; if (!tw) return;
+  let u = clamp((now - tw.t0) / tw.dur, 0, 1);
+  const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+  const lf = mix(tw.from.lf, tw.to.lf, e) + tw.bump * Math.sin(Math.PI * e);
+  S.field = Math.exp(lf);
+  // 視野の大きさに合わせて移動の速さを変える（寄るときに目が回らないように）
+  const ew = tw.bump > 0 ? smooth(0.15, 0.85, e) : e;
+  S.F = V.lerp(tw.from.F, tw.to.F, ew);
+  S.az = mix(tw.from.az, tw.to.az, e); S.el = mix(tw.from.el, tw.to.el, e);
+  S.A = null;
+  if (u >= 1) { S.tween = null; S.F = { ...tw.to.F }; reanchor(); } else { const { dir } = camBasis(); const h = Wood.raycast(S.F, dir, S.field); S.A = h ? h.p : { ...S.F }; }
+  markDirty();
+}
+
+// =====================================================================
+// [S8] 描画ループ（止まったら重ね描きしてきれいにする）
+// =====================================================================
+const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const { w, h } = cssSize();
+  const W = Math.round(w * dpr), H = Math.round(h * dpr);
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; markDirty(); }
+  updateViewCenter();
+}
+window.addEventListener('resize', resize);
+
+let lastFrameMs = 16, moveScale = 0.6;
+// どの描き方をどれだけ混ぜるか（視野の幅 µm で決める）
+function layerWeights(f){
+  const block = smooth(0.9, 1.6, f), atoms = smooth(0.016, 0.010, f);
+  return { block, deep: clamp(1 - block - atoms, 0, 1), atoms };
+}
+function commonUniforms(u, W, H, jit, unit){   // unit：1=µm, 1000=nm
+  const { dir, right, up } = camBasis();
+  const A = S.A, camOff = V.mul(V.sub(S.F, A), unit);
+  gl.uniform2f(u.uRes, W, H); gl.uniform2f(u.uJit, jit[0], jit[1]); gl.uniform1f(u.uField, S.field * unit); gl.uniform1f(u.uSeed, Math.random());
+  gl.uniform3f(u.uCamOff, camOff.x, camOff.y, camOff.z);
+  gl.uniform3f(u.uDir, dir.x, dir.y, dir.z); gl.uniform3f(u.uRight, right.x, right.y, right.z); gl.uniform3f(u.uUp, up.x, up.y, up.z);
+  gl.uniform3f(u.uPMax, (WD.X - A.x) * unit, (0 - A.y) * unit, (WD.Z - A.z) * unit);
+  gl.uniform3f(u.uPMin, (0 - A.x) * unit, (-WD.Y - A.y) * unit, (0 - A.z) * unit);
+  gl.uniform1f(u.uRound, WD.R * unit);
+  gl.uniform1f(u.uSem, semWeight());
+  gl.uniform2f(u.uCen, W / 2 + VC.ox * W / cssSize().w, H / 2 - VC.oy * W / cssSize().w);
+}
+function drawBlock(T, W, H, jit){
+  const P = G.wood; gl.useProgram(P.p); gl.bindVertexArray(G.vao);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.viewport(0, 0, W, H);
+  const u = P.u, au = Wood.anchorUniforms(S.A);
+  commonUniforms(u, W, H, jit, 1);
+  gl.uniform2fv(u.uVA, au.VA); gl.uniform1f(u.uRA, au.RA); gl.uniform1f(u.uSAbs, au.SAbs); gl.uniform1f(u.uYAbs, au.YAbs);
+  gl.uniform1f(u.uWaveA, au.WaveA); gl.uniform1f(u.uREffA, au.REffA); gl.uniform1f(u.uHeartRel, au.HeartRel);
+  gl.uniform1fv(u.uRelB, new Float32Array(au.RelB));
+  gl.uniform1f(u.uSRed, au.SRed); gl.uniform1i(u.uFB, au.FB);
+  gl.uniform1f(u.uYRed, au.YRed); gl.uniform1i(u.uYB, au.YB); gl.uniform1f(u.uY15, au.Y15);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+function drawDeep(T, W, H, jit){
+  const P = G.deep; gl.useProgram(P.p); gl.bindVertexArray(G.vao);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.viewport(0, 0, W, H);
+  const u = P.u, D = S.deep;
+  commonUniforms(u, W, H, jit, 1000);
+  gl.uniform3f(u.uN, D.n.x, D.n.y, D.n.z); gl.uniform3f(u.uB, D.b.x, D.b.y, D.b.z);
+  gl.uniform1f(u.uAA, D.aA); gl.uniform1f(u.uWp, D.wp); gl.uniform1f(u.uWm, D.wm);
+  gl.uniform1fv(u.uM, new Float32Array(D.M)); gl.uniform1fv(u.uEA, new Float32Array(D.EA)); gl.uniform1fv(u.uFA, new Float32Array(D.FA));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+// 原子は、照準が大きく動いたときや倍率が変わったときだけ並べ直す
+function ensureAtoms(){
+  const D = S.deep, f = S.field, g = S.atomGen;
+  const moved = g ? V.len(V.sub(S.F, g.F)) / f : 1e9;
+  if (g && g.n === D.n && moved < 0.2 && f < g.field * 1.3 && f > g.field / 3) return;
+  const t0 = performance.now();
+  const { atoms, bonds, focus } = buildAtoms(D, S.F, f);
+  // 強調した鎖のブドウ糖1個の位置（世界座標 µm）。ラベルに使う
+  S.focusRes = focus ? V.add(D.A, V.mul(focus.pos, 0.001)) : null;
+  gl.bindBuffer(gl.ARRAY_BUFFER, G.atomBuf); gl.bufferData(gl.ARRAY_BUFFER, atoms, gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, G.bondBuf); gl.bufferData(gl.ARRAY_BUFFER, bonds, gl.DYNAMIC_DRAW);
+  G.atomCount = atoms.length / 8; G.bondCount = bonds.length / 14;
+  S.atomGen = { F: { ...S.F }, A: { ...D.A }, field: f, n: D.n };
+  updateLabels();
+  console.info(`原子を並べました：原子 ${G.atomCount.toLocaleString()} 個・結合 ${G.bondCount.toLocaleString()} 本（${Math.round(performance.now() - t0)} ms）`);
+}
+function drawAtoms(T, W, H, jit){
+  ensureAtoms();
+  const P = G.atom; gl.useProgram(P.p); gl.bindVertexArray(G.atomVao);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, T.fbo); gl.viewport(0, 0, W, H);
+  const gray = S.mode === 2;
+  if (gray) gl.clearColor(0, 0, 0, 1); else gl.clearColor(0.86, 0.88, 0.90, 1);
+  gl.clearDepth(1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const { dir, right, up } = camBasis();
+  const camOff = V.mul(V.sub(S.F, S.atomGen.A), 1000);
+  const u = P.u;
+  gl.uniform3f(u.uCamOff, camOff.x, camOff.y, camOff.z);
+  gl.uniform3f(u.uDir, dir.x, dir.y, dir.z); gl.uniform3f(u.uRight, right.x, right.y, right.z); gl.uniform3f(u.uUp, up.x, up.y, up.z);
+  gl.uniform1f(u.uField, S.field * 1000); gl.uniform2f(u.uRes, W, H); gl.uniform2f(u.uJit, jit[0], jit[1]);
+  gl.uniform2f(u.uCen, W / 2 + VC.ox * W / cssSize().w, H / 2 - VC.oy * W / cssSize().w);
+  gl.uniform1f(u.uGray, gray ? 1 : 0);
+  const st = MOL_STYLE[S.molStyle];
+  gl.uniform1f(u.uRadScale, st.atom);
+  gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LESS);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, G.atomCount);
+  if (st.bond > 0 && G.bondCount > 0) {
+    const B = G.bond; gl.useProgram(B.p); gl.bindVertexArray(G.bondVao);
+    const v = B.u;
+    gl.uniform3f(v.uCamOff, camOff.x, camOff.y, camOff.z);
+    gl.uniform3f(v.uDir, dir.x, dir.y, dir.z); gl.uniform3f(v.uRight, right.x, right.y, right.z); gl.uniform3f(v.uUp, up.x, up.y, up.z);
+    gl.uniform1f(v.uField, S.field * 1000); gl.uniform2f(v.uRes, W, H); gl.uniform2f(v.uJit, jit[0], jit[1]);
+    gl.uniform2f(v.uCen, W / 2 + VC.ox * W / cssSize().w, H / 2 - VC.oy * W / cssSize().w);
+    gl.uniform1f(v.uGray, gray ? 1 : 0); gl.uniform1f(v.uBondR, st.bond);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, G.bondCount);
+  }
+  gl.disable(gl.DEPTH_TEST);
+  gl.bindVertexArray(null);
+}
+function frame(now){
+  requestAnimationFrame(frame);
+  if (!G.ok) return;
+  stepTween(now);
+  const moving = S.tween || (now - S.lastMove < 160);
+  const scale = moving ? moveScale : 1.0;
+  if (S.dirty) { S.accN = 0; S.dirty = false; updateUI(); }
+  if (scale !== S.lastScale) { S.accN = 0; S.lastScale = scale; }
+  if (S.accN >= (moving ? 1 : S.accMax)) return;
+  if (!S.A) reanchor();
+  const t0 = performance.now();
+  const W = Math.max(64, Math.round(canvas.width * scale)), H = Math.max(64, Math.round(canvas.height * scale));
+  ensureTargets(W, H);
+  const n = S.accN;
+  const jit = n === 0 ? [0, 0] : [halton(n + 1, 2) - 0.5, halton(n + 1, 3) - 0.5];
+  const lw = layerWeights(S.field);
+  if (lw.deep > 0 || lw.atoms > 0) S.deep = makeDeep(S.A, S.deep);
+  // 混ぜる2つを選んで描く
+  const list = [];
+  if (lw.block > 0.001) list.push(['block', lw.block]);
+  if (lw.deep > 0.001) list.push(['deep', lw.deep]);
+  if (lw.atoms > 0.001) list.push(['atoms', lw.atoms]);
+  const draw = { block: drawBlock, deep: drawDeep, atoms: drawAtoms };
+  draw[list[0][0]](G.t1, W, H, jit);
+  let w2 = 0;
+  if (list.length > 1) { draw[list[1][0]](G.t2, W, H, jit); w2 = list[1][1] / (list[0][1] + list[1][1]); }
+  // 重ね描き（止まっている間はジッターをかけて平均し、ギザギザを消す）
+  gl.bindFramebuffer(gl.FRAMEBUFFER, G.acc.fbo); gl.viewport(0, 0, W, H);
+  gl.useProgram(G.comp.p); gl.bindVertexArray(G.vao);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, G.t1.tex);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, (list.length > 1 ? G.t2 : G.t1).tex);
+  gl.uniform1i(G.comp.u.uT1, 0); gl.uniform1i(G.comp.u.uT2, 1); gl.uniform1f(G.comp.u.uW, w2); gl.uniform2f(G.comp.u.uRes, W, H);
+  if (n === 0) gl.disable(gl.BLEND);
+  else { gl.enable(gl.BLEND); gl.blendFunc(gl.CONSTANT_ALPHA, gl.ONE_MINUS_CONSTANT_ALPHA); gl.blendColor(0, 0, 0, 1 / (n + 1)); }
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.disable(gl.BLEND);
+  // 画面へ
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.useProgram(G.show.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, G.acc.tex);
+  gl.uniform1i(G.show.u.uTex, 0); gl.uniform2f(G.show.u.uRes, canvas.width, canvas.height);
+  gl.uniform1f(G.show.u.uSem, lw.atoms > 0.5 ? 0 : semWeight());
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  S.accN++;
+  if (moving) {
+    const ms = performance.now() - t0; lastFrameMs = mix(lastFrameMs, ms, 0.2);
+    moveScale = lastFrameMs > 40 ? Math.max(0.35, moveScale - 0.05) : lastFrameMs < 18 ? Math.min(0.8, moveScale + 0.02) : moveScale;
+  }
+}
+
+// =====================================================================
+// [S9] 画面の表示（はしご・ものさし・照準の説明・ラベル）
+// =====================================================================
+const BANDS = [
+  { name: '肉眼', from: 160000, to: 8000, col: '#c9a27a' },
+  { name: 'ルーペ', from: 8000, to: 800, col: '#d8b98f' },
+  { name: '光学顕微鏡', from: 800, to: 40, col: '#8fb3d9' },
+  { name: '電子顕微鏡', from: 40, to: 0.03, col: '#9aa3ad' },
+  { name: '分子モデル', from: 0.03, to: 0.002, col: '#b7a3d6' }
+];
+const LADDER = { top: Math.log10(FIELD_MAX), bot: Math.log10(0.002) };
+function ladderY(field){ return (LADDER.top - Math.log10(field)) / (LADDER.top - LADDER.bot); }
+function buildLadder(){
+  const tr = document.getElementById('track');
+  BANDS.forEach(b => {
+    const y0 = ladderY(b.from), y1 = ladderY(b.to);
+    const el = document.createElement('div'); el.className = 'band';
+    el.style.top = (y0 * 100) + '%'; el.style.height = ((y1 - y0) * 100) + '%'; el.style.background = b.col;
+    tr.appendChild(el);
+    const nm = document.createElement('div'); nm.className = 'bandname'; nm.textContent = b.name;
+    nm.style.top = ((y0 + y1) / 2 * 100) + '%'; tr.appendChild(nm);
+  });
+  [[10000,'1 cm'],[1000,'1 mm'],[100,'100 µm'],[10,'10 µm'],[1,'1 µm'],[0.1,'100 nm'],[0.01,'10 nm']].forEach(([v, t]) => {
+    const el = document.createElement('div'); el.className = 'tick'; el.textContent = t; el.style.top = (ladderY(v) * 100) + '%'; tr.appendChild(el);
+  });
+  tr.addEventListener('click', e => {
+    const r = tr.getBoundingClientRect();
+    const y = clamp((e.clientY - r.top) / r.height, 0, 1);
+    const f = clamp(Math.pow(10, LADDER.top - y * (LADDER.top - LADDER.bot)), FIELD_MIN, FIELD_MAX);
+    flyTo({ F: S.F, field: f }); stopTour(true);
+  });
+  document.getElementById('zin').onclick = () => flyTo({ F: S.F, field: clamp(S.field / 4, FIELD_MIN, FIELD_MAX) }, 600);
+  document.getElementById('zout').onclick = () => flyTo({ F: S.F, field: clamp(S.field * 4, FIELD_MIN, FIELD_MAX) }, 600);
+}
+function instrumentOf(f){ for (const b of BANDS) if (f <= b.from && f > b.to) return b.name; return f > 8000 ? '肉眼' : '分子モデル'; }
+function updateUI(){
+  const { w } = cssSize();
+  document.getElementById('marker').style.top = (ladderY(S.field) * 100) + '%';
+  // ものさし：1・2・5 の切りのいい長さ
+  const umPerPx = S.field / w;
+  const target = umPerPx * 120;
+  const p10 = Math.pow(10, Math.floor(Math.log10(target)));
+  const nice = [1, 2, 5, 10].map(m => m * p10).filter(v => v <= target).pop() || p10;
+  document.getElementById('scalebar').style.width = (nice / umPerPx) + 'px';
+  document.getElementById('scalelabel').textContent = fmtLen(nice);
+  document.getElementById('fieldTxt').textContent = fmtLen(S.field);
+  // 画面上の倍率：1366px 幅の画面を約 25.6cm として概算（Chromebook 11.6型）
+  const mag = (w * 187.4) / S.field;
+  document.getElementById('magTxt').textContent = '約 ' + (mag < 10 ? mag.toFixed(1) : Number(mag.toPrecision(2)).toLocaleString()) + ' 倍';
+  document.getElementById('inst').textContent = instrumentOf(S.field);
+  const mb = document.getElementById('molBar');
+  mb.classList.toggle('show', S.field < 0.03);
+  mb.style.left = (cssSize().w / 2 + VC.ox) + 'px';
+  updateLabels();
+  const now = performance.now();
+  clearTimeout(S.probeTimer);
+  if (now - (S.lastInfo || 0) > 120) { S.lastInfo = now; updateInfo(); }
+  else S.probeTimer = setTimeout(() => { S.lastInfo = performance.now(); updateInfo(); }, 130);
+}
+// 3つの断面のラベル（引いて見ているときだけ）
+function project(P){
+  const { right, up } = camBasis(); const { w, h } = cssSize();
+  const d = V.sub(P, S.F);
+  return { x: w / 2 + VC.ox + V.dot(d, right) / S.field * w, y: h / 2 + VC.oy - V.dot(d, up) / S.field * w };
+}
+function updateLabels(){
+  const box = document.getElementById('labels');
+  if (S.labels && S.field < 0.014 && S.focusRes) {
+    const q = project(S.focusRes);
+    box.innerHTML = `<div class="lbl" style="left:${q.x + 70}px;top:${q.y - 60}px"><span style="border:2px solid #2a9e61">緑の鎖が セルロース分子 1本<small>この1本が、ブドウ糖がつながった鎖です</small></span></div>`;
+    return;
+  }
+  const show = S.labels && S.field > 9000 && S.mat === 'wood';
+  if (!show) { box.innerHTML = ''; return; }
+  const L = [
+    { p: { x: WD.X * 0.55, y: 0, z: WD.Z * 0.55 }, t: '木口', s: 'こぐち（輪切りの面）' },
+    { p: { x: WD.X, y: -WD.Y * 0.45, z: WD.Z * 0.5 }, t: '柾目', s: 'まさめ（中心を通る縦の面）' },
+    { p: { x: WD.X * 0.5, y: -WD.Y * 0.45, z: WD.Z }, t: '板目', s: 'いため（年輪に沿った縦の面）' }
+  ];
+  box.innerHTML = L.map(l => { const q = project(l.p); return `<div class="lbl" style="left:${q.x}px;top:${q.y}px"><span>${l.t}<small>${l.s}</small></span></div>`; }).join('');
+}
+
+// ---- 照準の下にあるものの説明
+const TXT = {
+  top: { t: '木口', r: 'こぐち', b: '木を輪切りにした面です。年輪が同心円の一部として見えます。赤みのある内側が心材、白っぽい外側が辺材です。細長い細胞の「切り口」がこの面にぎっしり並んでいます。' },
+  x: { t: '柾目', r: 'まさめ', b: '幹の中心を通るように縦に切った面です。年輪がまっすぐな縞になります。細胞を縦に割った面なので、細長い管が上下に走っています。' },
+  z: { t: '板目', r: 'いため', b: '年輪に沿うように縦に切った面です。年輪が山形（タケノコ形）の模様になります。' },
+  early: { t: '早材', r: 'そうざい', b: '春から夏につくられた部分です。細胞が大きく、壁がうすいので、すき間が多くなります。水をたくさん運ぶための作りです。' },
+  late: { t: '晩材', r: 'ばんざい', b: '夏から秋につくられた部分です。細胞が小さく、壁が厚いので、ぎっしり詰まって濃く見えます。木の重さを支える作りです。早材と晩材の1組が、1年分＝年輪です。' },
+  tracheid: { t: '仮道管', r: 'かどうかん', b: 'スギの材の約97%はこの細胞でできています。長さ約3mmの細長い管で、木の軸の方向（繊維方向）にそろって並んでいます。ストローを束ねたような作りです。' },
+  lumen: { t: '仮道管の中（空洞）', r: 'ないこう', b: '仮道管の中は空っぽです。生きている木では、ここを水が根から葉へ上がっていきます。' },
+  ray: { t: '放射組織', r: 'ほうしゃそしき', b: '幹の中心から外へ向かって、横向きに並ぶ細胞の列です。仮道管とは向きが直角です。' },
+  resin: { t: '樹脂細胞', r: 'じゅしさいぼう', b: '仮道管の間に、ところどころある細胞です。中に濃い色の物質がたまっています。' },
+  pit: { t: '壁孔', r: 'へきこう', b: 'となりの仮道管との間にあいた穴です。水はこの穴を通って、となりの仮道管へ移りながら上がっていきます。ふちが盛り上がった形（有縁壁孔）をしています。' },
+  wall: { t: '細胞壁', r: 'さいぼうへき', b: '木の強さを生むのは、この壁です。仮道管が縦に長いので、壁も縦につながっています。だから木は繊維方向に強く、横からの力で割れやすくなります。' },
+  ML: { t: '細胞間層', r: 'さいぼうかんそう', b: 'となりの細胞どうしを貼り合わせている層です。リグニンを多く含みます。木を横から割ると、このあたりで離れやすくなります。' },
+  S1: { t: '二次壁の外層（S1）', r: 'えすわん', b: '細胞壁を内側から支えるうすい層です。セルロースの繊維（ミクロフィブリル）が、ほぼ横向きに巻いています。' },
+  S2: { t: '二次壁の中層（S2）', r: 'えすつー', b: '細胞壁のいちばん厚い層です。セルロースの繊維（ミクロフィブリル）が、ほぼ縦（繊維方向）にそろっています。木が繊維方向に強い理由の中心です。' },
+  S3: { t: '二次壁の内層（S3）', r: 'えすすりー', b: '空洞に面したうすい層です。ミクロフィブリルは、ふたたび横向きに近くなります。' },
+  mf: { t: 'ミクロフィブリル', r: 'みくろふぃぶりる', b: 'セルロースの分子が束になった、細い繊維です。細胞壁の中に、鉄筋コンクリートの鉄筋のように並んでいます。S2 層では、ほぼ縦（繊維方向）にそろっています。' },
+  lignin: { t: 'リグニン', r: 'りぐにん', b: 'ミクロフィブリルのすき間を埋めて、全体を固めている物質です。鉄筋コンクリートでいえばコンクリートにあたります。' },
+  ligninMol: { t: 'リグニンの分子', r: 'りぐにん', b: '六角形の輪（ベンゼン環）をもつ分子が、立体的な網目のようにつながっています。セルロースのような、まっすぐな鎖ではありません。' },
+  hemi: { t: 'ヘミセルロース', r: 'へみせるろーす', b: 'ミクロフィブリルのまわりを包み、リグニンとつないでいる糖の分子です。セルロースより短く、枝分かれしています。' },
+  cellulose: { t: 'セルロースの分子', r: 'せるろーす', b: 'ブドウ糖（グルコース）が、向きを交互に変えながら一直線につながった鎖です。となりの鎖とは水素結合で横につながります。この鎖が縦にそろっているので、木は繊維方向に引っぱる力に強いのです。' }
+};
+function updateInfo(){
+  if (S.mat !== 'wood' || !S.A) return;
+  const A = S.A, f = S.field, eps = Math.max(f * 4e-4, 2e-4);
+  const c = Wood.cellAtWorld(A);
+  const onCut = Math.abs(Wood.sdBlock(A)) < eps * 4;
+  const hN = Math.max(f * 1e-3, 0.01);
+  const gx = Wood.sdBlock({ x: A.x + hN, y: A.y, z: A.z }) - Wood.sdBlock({ x: A.x - hN, y: A.y, z: A.z });
+  const gy = Wood.sdBlock({ x: A.x, y: A.y + hN, z: A.z }) - Wood.sdBlock({ x: A.x, y: A.y - hN, z: A.z });
+  const gz = Wood.sdBlock({ x: A.x, y: A.y, z: A.z + hN }) - Wood.sdBlock({ x: A.x, y: A.y, z: A.z - hN });
+  const face = !onCut ? null : (gy >= gx && gy >= gz ? 'top' : gx >= gz ? 'x' : 'z');
+  const lateWood = c.cs < 24;
+  const heart = c.rEff < WD.HEART ? 'heart' : (c.rEff < WD.HEART + WD.WHITE ? 'white' : 'sap');
+  const chips = [];
+  chips.push(heart === 'heart' ? ['心材（赤身）', 'c-heart'] : heart === 'white' ? ['白線帯', 'c-sap'] : ['辺材（白太）', 'c-sap']);
+  chips.push(lateWood ? ['晩材', 'c-late'] : ['早材', 'c-early']);
+  if (face) chips.push([{ top: '木口', x: '柾目', z: '板目' }[face], '']);
+  let key, size = '';
+  if (f >= 7000) {
+    key = face || 'top';
+  } else if (f >= 700) {
+    key = lateWood ? 'late' : 'early';
+    size = lateWood ? '晩材の仮道管：太さ <b>10〜20 µm</b>・壁の厚さ <b>3〜7 µm</b>' : '早材の仮道管：太さ <b>30〜50 µm</b>・壁の厚さ <b>1〜3 µm</b>';
+  } else if (f >= 35) {
+    key = c.kind === 1 ? 'ray' : c.kind === 2 || c.resin ? 'resin' : (onCut && c.sd < 0 ? 'tracheid' : 'lumen');
+    if (c.pit > 0.05 && !onCut) key = 'pit';
+    size = c.kind === 1 ? '' : lateWood ? '晩材：太さ <b>10〜20 µm</b>・幅 30〜45 µm・壁 <b>3〜7 µm</b>・長さ 約 3 mm'
+                                         : '早材：太さ <b>30〜50 µm</b>・幅 30〜45 µm・壁 <b>1〜3 µm</b>・長さ 約 3 mm';
+  } else if (f >= 4) {
+    key = c.kind === 1 ? 'ray' : c.kind === 2 ? 'resin' : c.pit > 0.05 && !onCut ? 'pit' : (onCut ? 'wall' : 'lumen');
+    if (key === 'pit') size = '壁孔の直径：この模型では <b>約 ' + Math.round(Math.min(9, c.hr * 0.6) * 2) + ' µm</b>（孔の部分は約 4 µm）';
+    else if (key === 'wall') size = 'この細胞の壁の厚さ：<b>約 ' + c.w.toFixed(1) + ' µm</b>（となりの細胞と合わせて 2 枚分）';
+  } else if (f < 1.2 && (S.deep = makeDeep(S.A, S.deep))) {
+    // 細胞壁の中：どの層か、繊維（セルロース）か、すき間（リグニンなど）か
+    const D = S.deep, Fo = V.mul(V.sub(S.F, D.A), 1000);
+    const a = D.aA + V.dot(Fo, D.n), L = deepLayer(a, D.wp, D.wm);
+    const layerName = L === -1 ? '細胞間層' : L === -2 ? '一次壁' : ['S1 層', 'S2 層', 'S3 層'][L % 3];
+    chips.length = 0; chips.push([layerName, 'c-late']);
+    let onFib = false;
+    if (L >= 0) {
+      const sg = L < 3 ? 1 : -1, m = D.M[L];
+      const e = D.EA[L] + V.dot(Fo, D.b) * Math.cos(m) - sg * Fo.y * Math.sin(m);
+      const nf = nearestFibril(a, e, L);
+      onFib = !!nf && nf.d < 0.15;
+      if (!onFib && nf && nf.d < 1.1) key = 'hemi';
+    }
+    if (onFib) { key = f < 0.03 ? 'cellulose' : 'mf'; chips.push(['繊維の傾き ' + DEEP.MFA[L % 3] + '°', '']); }
+    else if (!key) key = L < 0 ? 'ML' : 'lignin';
+    size = { mf: 'ミクロフィブリルの太さ：<b>3〜5 nm</b>・セルロース分子 <b>18〜24 本</b>の束',
+             cellulose: 'ブドウ糖1個分の長さ：<b>約 0.5 nm</b>　<span style="color:#888">●</span>炭素 <span style="color:#d62a20">●</span>酸素 <span style="color:#bbb">○</span>水素',
+             lignin: f < 0.03 ? 'ベンゼン環（6つの炭素の輪）をもつ分子が、立体の網目につながっています' : '',
+             hemi: '', ML: '' }[key] || '';
+    if (f < 0.03 && key === 'lignin') key = 'ligninMol';
+  } else {
+    if (onCut && c.kind === 0 && c.sd < 0) {
+      const d = c.depth;
+      key = d < 0.15 ? 'ML' : d < 0.45 ? 'S1' : d > c.w - 0.12 ? 'S3' : 'S2';
+      size = { ML: '厚さ：0.1〜0.2 µm 程度', S1: '厚さ：<b>0.1〜0.3 µm</b>・繊維の傾き 60〜80°', S2: '厚さ：<b>1〜5 µm</b>（壁全体の約8割）・繊維の傾き 0〜30°', S3: '厚さ：<b>約 0.1 µm</b>・繊維の傾き 60〜90°' }[key];
+    } else key = c.kind === 2 ? 'resin' : 'lumen';
+  }
+  const T = TXT[key];
+  document.getElementById('infoTitle').textContent = T.t;
+  document.getElementById('infoRuby').textContent = T.r;
+  document.getElementById('infoBody').textContent = T.b;
+  document.getElementById('infoChips').innerHTML = chips.map(([t, c]) => `<span class="chip ${c}">${t}</span>`).join('');
+  const sz = document.getElementById('infoSize'); sz.innerHTML = size; sz.style.display = size ? 'block' : 'none';
+}
+
+// =====================================================================
+// [S10] 見どころツアー（教師の一斉提示用）
+// =====================================================================
+const Tour = {
+  stops: [
+    { t: '3つの断面', s: 'ブロック全体', make: () => ({ F: { x: WD.X / 2, y: -WD.Y / 2, z: WD.Z / 2 }, field: 135000, az: 45, el: 30 }) },
+    { t: '年輪', s: '心材と辺材', make: () => ({ F: findRingPoint(0.5), field: 15000, az: 45, el: 52 }) },
+    { t: '早材と晩材', s: '年輪の境目', make: () => ({ F: findRingPoint(0), field: 1300, az: 45, el: 60 }) },
+    { t: '仮道管', s: 'ストローの束', make: () => ({ F: findEdgePoint(), field: 520, az: 38, el: 32 }) },
+    { t: '壁孔', s: '水の通り道', make: () => findPitView() },
+    { t: '細胞壁の層', s: 'S1・S2・S3', make: () => ({ F: findWallPoint(), field: 30, az: 45, el: 62 }) },
+    { t: 'ミクロフィブリル', s: 'セルロースの繊維', make: () => ({ F: findS2Point(), field: 0.32, az: 78, el: 22 }) },
+    { t: 'セルロース分子', s: 'ブドウ糖の鎖', make: () => ({ F: findS2Point(), field: 0.006, az: 84, el: 12 }) }
+  ],
+  build(){
+    const list = document.getElementById('tourList');
+    list.innerHTML = this.stops.map((s, i) => `<button data-i="${i}" ${s.lock ? 'style="opacity:.5"' : ''}><span class="num">${i + 1}</span><span>${s.t}<span class="t2">${s.s}</span></span></button>`).join('');
+    list.querySelectorAll('button').forEach(b => b.onclick = () => this.go(+b.dataset.i));
+  },
+  go(i){
+    const st = this.stops[i];
+    if (st.lock) { showModal('<h2><span class="ms">construction</span>' + st.t + '</h2><p>細胞壁の中（ミクロフィブリル）と分子のモデルは、見た目の方向を確かめてから次の段階で作ります。</p><button class="ok" onclick="hideModal()">閉じる</button>'); return; }
+    const tg = st._tg || (st._tg = st.make());
+    flyTo(tg);
+    S.tourIdx = i;
+    document.querySelectorAll('#tourList button').forEach((b, k) => b.classList.toggle('on', k === i));
+  }
+};
+function stopTour(keep){ if (S.tween && !keep) S.tween = null; if (S.tourIdx >= 0) { S.tourIdx = -1; document.querySelectorAll('#tourList button').forEach(b => b.classList.remove('on')); } }
+// 木口の上で、年輪の境目（frac=0）や年輪の中ほどにある点を探す
+function findRingPoint(frac){
+  const x = WD.X * 0.62;
+  const target = (() => { // 心材の外周に近い年輪
+    const n = Wood.ringOf(WD.HEART - 1500);
+    return RINGS[n] + (RINGS[n + 1] - RINGS[n]) * frac;
+  })();
+  let lo = 0, hi = WD.Z;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; const r = Wood.polar({ x, y: 0, z: m }).rEff; if (r < target) lo = m; else hi = m; }
+  return { x, y: 0, z: (lo + hi) / 2 };
+}
+// 木口と柾目の角（SEM 写真と同じ見え方）の、早材の場所
+function findEdgePoint(){
+  const n = Wood.ringOf(WD.HEART - 1500);
+  const target = RINGS[n] + (RINGS[n + 1] - RINGS[n]) * 0.97;
+  let lo = 0, hi = WD.Z;
+  for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; const r = Wood.polar({ x: WD.X, y: 0, z: m }).rEff; if (r < target) lo = m; else hi = m; }
+  return { x: WD.X - 2, y: -2, z: (lo + hi) / 2 };
+}
+// 柾目の面で、割れた仮道管の奥の壁に壁孔が見える場所を探す
+function findPitView(){
+  const az = 12, el = 18;
+  const save = { az: S.az, el: S.el };
+  S.az = az; S.el = el; const { dir } = camBasis(); S.az = save.az; S.el = save.el;
+  const n = Wood.ringOf(WD.HEART - 1500);
+  for (let tries = 0; tries < 3000; tries++) {
+    const z = RINGS[n] + WD.PZ + (RINGS[n + 1] - RINGS[n]) * (0.15 + 0.5 * h2(tries, 901));
+    const y = -2000 - 3000 * h2(tries, 902);
+    const P = { x: WD.X, y, z: z };
+    const hit = Wood.raycast(V.sub(P, V.mul(dir, 200)), dir, 80);
+    if (!hit) continue;
+    const c = Wood.cellAtWorld(hit.p);
+    if (c.pit > 0.8 && c.kind === 0 && Math.abs(Wood.sdBlock(hit.p)) > 3) return { F: hit.p, field: 75, az, el };
+  }
+  return { F: { x: WD.X, y: -2500, z: WD.Z * 0.5 }, field: 75, az, el };
+}
+// 板目の面で、接線方向の壁（年輪に平行な壁）の S2 層が切り口に出ている所。繊維が縦に寝て見える
+function findS2Point(){
+  if (findS2Point._p) return findS2Point._p;
+  const n = Wood.ringOf(WD.HEART + WD.WHITE + 3000);
+  for (let tries = 0; tries < 20000; tries++) {
+    const P = { x: WD.X * (0.25 + 0.5 * h2(tries, 921)), y: -3000 - 20000 * h2(tries, 922), z: WD.Z };
+    const c = Wood.cellAtWorld(P);
+    if (c.kind !== 0 || c.resin || c.w < 4.2 || c.sd > -1) continue;
+    const dR = c.hr - Math.abs(c.xr), dT = c.ht - Math.abs(c.xt);
+    if (dR < dT && dR > 1.6 && dR < c.w - 1.2) return (findS2Point._p = P);
+  }
+  return (findS2Point._p = { x: WD.X * 0.5, y: -5000, z: WD.Z });
+}
+// 晩材の厚い壁の、切り口のまん中（細胞間層）
+function findWallPoint(){
+  const n = Wood.ringOf(WD.HEART - 1500);
+  for (let tries = 0; tries < 2000; tries++) {
+    const z = RINGS[n] - WD.PZ + (RINGS[n + 1] - RINGS[n]) * (0.94 + 0.05 * h2(tries, 911));
+    const x = WD.X * (0.55 + 0.1 * h2(tries, 912));
+    // 木口の上で z を探し直す（r_eff が狙いの位置になるように）
+    const P = { x, y: 0, z: 0 };
+    let lo = 0, hi = WD.Z;
+    for (let i = 0; i < 50; i++) { const m = (lo + hi) / 2; P.z = m; if (Wood.polar(P).rEff < z + WD.PZ) lo = m; else hi = m; }
+    const c = Wood.cellAtWorld(P);
+    if (c.kind === 0 && !c.resin && c.w > 4.5 && c.sd < -2 && Math.abs(c.depth) < 0.6 && Math.abs(c.xt) > c.ht - 1) return { ...P };
+  }
+  return findRingPoint(0.97);
+}
+
+// =====================================================================
+// [S11] ボタン類
+// =====================================================================
+function showModal(html){ document.getElementById('modalBox').innerHTML = html; document.getElementById('modal').classList.add('show'); }
+function hideModal(){ document.getElementById('modal').classList.remove('show'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') hideModal(); });
+function hideHint(){ const h = document.getElementById('hint'); if (h) h.style.opacity = 0.35; }
+const PLAN = {
+  metal: { t: '金属（軟鋼）', icon: 'hardware', steps: ['研いだ面のつや', '結晶粒（フェライトとパーライト）', 'パーライトのしま模様', '鉄原子の並び（体心立方）と、結晶の境目・転位'], q: '向きのばらばらな小さな結晶が集まっているので、木のような「向きによる強さの差」が小さい。' },
+  plastic: { t: 'プラスチック（PLA の3Dプリント）', icon: 'view_in_ar', steps: ['積層の筋（0.2 mm ごと）', '層の境目とすき間', '分子鎖のからみ合い（層の境目ではからみが少ない）', '乳酸がつながった分子'], q: '層の中は分子がからみ合って強いが、層と層の境目はからみが少なくて弱い。第8時の破壊実験とつながる。' }
+};
+document.querySelectorAll('#matSeg button').forEach(b => b.onclick = () => {
+  const m = b.dataset.mat;
+  if (m === 'wood') return;
+  const P = PLAN[m];
+  showModal(`<h2><span class="ms">${P.icon}</span>${P.t}は次の段階で作ります</h2>
+    <p>木材の見た目と動きを確かめてから、同じ仕組みで作ります。予定しているズームの道すじ：</p>
+    <ol>${P.steps.map(s => `<li>${s}</li>`).join('')}</ol>
+    <p><b>この材料で見せたいこと：</b>${P.q}</p><button class="ok" onclick="hideModal()">閉じる</button>`);
+});
+document.querySelectorAll('#molSeg button').forEach(b => b.onclick = () => {
+  S.molStyle = b.dataset.st;
+  document.querySelectorAll('#molSeg button').forEach(x => x.classList.toggle('on', x === b));
+  markDirty();
+});
+document.querySelectorAll('#modeSeg button').forEach(b => b.onclick = () => {
+  S.mode = +b.dataset.mode;
+  document.querySelectorAll('#modeSeg button').forEach(x => x.classList.toggle('on', x === b));
+  markDirty();
+});
+const VIEWS = { iso: [45, 32], top: [45, 84], x: [6, 10], z: [84, 10] };
+document.querySelectorAll('#viewSeg button').forEach(b => b.onclick = () => {
+  const v = b.dataset.view;
+  if (v === 'rot') { S.rotMode = !S.rotMode; b.classList.toggle('on', S.rotMode); return; }
+  const [az, el] = VIEWS[v];
+  flyTo({ F: S.F, field: S.field, az, el }, 700);
+});
+document.getElementById('lblBtn').onclick = e => { S.labels = !S.labels; e.currentTarget.classList.toggle('on', S.labels); updateLabels(); };
+document.getElementById('helpBtn').onclick = () => showModal(`<h2><span class="ms">help</span>使い方</h2>
+  <ul><li><b>ドラッグ</b>：試料を動かす（顕微鏡のステージを動かす感じ）</li>
+  <li><b>ホイール・ピンチ</b>：拡大・縮小。カーソルのある場所に向かって寄ります</li>
+  <li><b>右ドラッグ・Shift＋ドラッグ</b>：向きを変える（タブレットは右上の <span class="ms" style="font-size:16px">3d_rotation</span> を押してから1本指）</li>
+  <li><b>左のはしご</b>：押した倍率へ飛ぶ。帯の色は「その大きさを見る道具」</li>
+  <li><b>見どころツアー</b>：順に押すと、見どころへ自動で飛びます</li></ul>
+  <p>画面のまん中の <b>＋（照準）</b> の下にあるものの名前と説明が、右に出ます。</p>
+  <button class="ok" onclick="hideModal()">はじめる</button>`);
+document.getElementById('srcText').innerHTML = `
+  <p>この模型は、実際の寸法・並び方に合わせて<b>計算で描いています</b>（写真ではありません）。細胞の形や並びには、模型としての単純化があります。</p>
+  <p>スギの仮道管の寸法・約97%・長さ約3mm・壁孔：兵庫県立農林水産技術総合センター「スギ材の構造 -Q&A-」(2016)<br><a href="https://hyogo-nourinsuisangc.jp/sinrin/images/Nagai_Cryptomeria_SEM2016.pdf" target="_blank" rel="noopener">hyogo-nourinsuisangc.jp</a></p>
+  <p>心材・辺材の色：北海道立総合研究機構 林産試験場「スギ」<br><a href="https://www.hro.or.jp/forest/research/fpri/koho/default/doumoku-index/sugi.html" target="_blank" rel="noopener">hro.or.jp</a></p>
+  <p>細胞壁の層の厚さ・ミクロフィブリルの傾き：ScienceDirect Topics「Tracheid」ほか<br><a href="https://www.sciencedirect.com/topics/agricultural-and-biological-sciences/tracheid" target="_blank" rel="noopener">sciencedirect.com</a></p>
+  <p>（2026年10月5日確認）</p>`;
+
+// =====================================================================
+// [S12] 起動
+// =====================================================================
+initGL();
+buildLadder();
+Tour.build();
+resize();
+reanchor();
+updateUI();
+requestAnimationFrame(frame);
+console.info('起動しました');
+</script>
+</body>
+</html>
